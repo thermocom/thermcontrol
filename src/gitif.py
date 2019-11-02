@@ -14,14 +14,14 @@ def init(conf):
         logger.critical("No 'datarepo' param in configuration")
         raise Exception("No 'datarepo' param in configuration")
     global g_gitcmd
-    # Attempt to suppress the "already up-to-date message", not working
-    g_gitcmd = ['git', '-c', 'merge.verbosity=-1',
-                '-c', 'commit.verbose=0',
-                '--work-tree=' + g_datarepo]
+    g_gitcmd = ['git',
+                '--work-tree=' + g_datarepo,
+                '--git-dir=' + os.path.join(g_datarepo, '.git')
+                ]
 
 def fetch_setpoint():
     defaultvalue = 10.0
-    cmd = g_gitcmd + ['pull',]
+    cmd = g_gitcmd + ['pull', '-q']
     try:
         subprocess.check_call(cmd)
     except:
@@ -45,14 +45,27 @@ def fetch_setpoint():
 
 def _try_run_git(cmd):
     try:
+        logging.error("RUNNING [%s]" % cmd)
         subprocess.check_call(cmd)
+        return True
     except Exception as e:
         logger.exception("git command failed: %s", cmd)
-        raise e
+        return False
     
 def send_updates():
-    _try_run_git(g_gitcmd + ['add', '.'])
-    _try_run_git(g_gitcmd + ['commit', '-m', 'n'])
+    try:
+        modified = subprocess.check_output(g_gitcmd + ['status', '-s'])
+    except:
+        logger.exception("git command failed: %s", cmd)
+        return
+    if not modified:
+        return
+    if not _try_run_git(g_gitcmd + ['add', '.']):
+        return
+    if not _try_run_git(g_gitcmd + ['commit', '-m', 'n']):
+        return
+    _try_run_git(g_gitcmd + ['push', '-q'])
+
     
 ##########
 if __name__ == '__main__':
