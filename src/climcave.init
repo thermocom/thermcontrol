@@ -1,0 +1,38 @@
+#!/bin/sh
+
+#
+# Start or stop climcave application
+#
+### BEGIN INIT INFO
+# Provides:          climcave
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Cellar temperature daemon
+# Description:       Cellar temperature daemon
+#                   
+### END INIT INFO
+
+climbin=/home/dockes/thermostat/src
+climuid=dockes
+
+CLIMCAVE_CONFIG=/home/dockes/.climcave_config
+export CLIMCAVE_CONFIG
+RUNDIR=/home/dockes/pyclimcave
+
+case "$1" in
+start)
+    su $psxuid -c "(python $climbin/climcave.py < /dev/null > /tmp/climcave.std 2>&1 )&"
+    echo -n ' climcave'
+    ;;
+stop)
+    for f in $RUNDIR/climcave.pid ; do
+        test -f $f && kill `cat $f`
+    done
+    ;;
+*)
+    echo "Usage: `basename $0` {start|stop}" >&2
+    exit 64
+    ;;
+esac

@@ -1,0 +1,19 @@
+# Fichier installe comme /home/dockes/.climcave_config sur l'odroid64 de la
+# cave
+
+logfilename = /home/dockes/pyclimcave/logclimcave
+#1:CRITICAL, 2:ERROR, 3:WARNING, 4:INFO, 5:DEBUG
+loglevel = 3
+
+templog = /home/dockes/pyclimcave/templog
+
+# Ids for the HA5-connected DS1820
+idtempext = 10.A46B7D020800
+idtempint = 10.155DC1000800
+
+# Pin 16, BCM 23
+fan_pin = 16
+
+# Not used because using_t2ss is not set. The t2ss is dead
+idctl1 = 12.C5440E000000
+
