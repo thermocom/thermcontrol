@@ -9,6 +9,7 @@ import conftree
 import owif
 import utils
 import PID
+import gitif
 
 class ConfNull(object):
     def get(self, nm, sk = b''):
@@ -37,6 +38,8 @@ def init():
         logger.critical("No housetempids defined in configuration")
         sys.exit(1)
 
+    gitif.init(conf)
+    
     # Retrieve the target temperature
 
     # Create the PID controller
