@@ -31,6 +31,11 @@ def init():
     global logger
     logger = logging.getLogger(__name__)
 
+    pidfile = conf.get('pidfile')
+    if not pidfile:
+        pidfile = '/tmp/thermostat.pid'
+    utils.pidw(pidfile)
+
     global g_housetempids
     g_housetempids = conf.get('housetempids').split()
     if not g_housetempids:
@@ -45,35 +50,41 @@ def init():
     gitif.init(datarepo)
     thermlog.init(datarepo)
 
-    # Retrieve the target temperature
-    global g_setpoint
-    g_setpoint = gitif.fetch_setpoint()
-
     gpio_pin = int(conf.get("gpio_pin"))
     if not gpio_pin:
-            logger.critical("No fan_pin defined in configuration")
-            sys.exit(1)
-        global pioif
-        import pioif
-        pioif.init(gpio_pin)
-    pidw()
+        logger.critical("No fan_pin defined in configuration")
+        sys.exit(1)
+    pioif.init(gpio_pin)
+
+    # Retrieve the target temperature
+    get_setpoint()
+
     # And the PID coefs
-    Kp = float(conf.get('pid_kp') or 50.0)
-    Ki = float(conf.get('pid_ki') or 20.0)
-    Kd = float(conf.get('pid_kd') or 0.0)
+    global g_kp, g_ki, g_kd
+    g_kp = float(conf.get('pid_kp') or 50.0)
+    g_ki = float(conf.get('pid_ki') or 20.0)
+    g_kd = float(conf.get('pid_kd') or 0.0)
     # Create the PID controller
-    g_pidcontrol = PID.PID(Kp=Kp, Ki=Ki, Kd=Kd,
-                           setpoint=g_setpoint,
-                           sample_time=None,
-                           output_limits=(0, 100),
-                           auto_mode=True,
-                           proportional_on_measurement=False):
+    create_pid()
 
-
+def get_setpoint():
+    global g_setpoint
+    g_setpoint = gitif.fetch_setpoint()
+    
+def create_pid():
+    global g_pidcontrol
+    g_pidcontrol = PID.PID(
+        Kp=g_kp, Ki=g_ki, Kd=g_kd,
+        setpoint=g_setpoint,
+        sample_time=None,
+        output_limits=(0, 100),
+        auto_mode=True,
+        proportional_on_measurement=False)
+        
 def gettemp():
     temp = 0.0
     for id in g_housetempids:
-        temp += owif.readtemp.gettemp(id)
+        temp += owif.readtemp(id)
     return temp / len(g_housetempids)
 
 
@@ -83,30 +94,53 @@ def main():
     minute = 60
     # We loop every minute to test things to do (maybe log, turn off
     # heater or whatever)
-    intloopperiod = minute
+    innerloopseconds = minute
     # We manage the heater every 30 minutes.
-    extloopintloops = 30
+    extloopinnerloops = 30
 
     loopcount = 0
     heatminutes = 0
+    command = 0.0
+    heateron = False
     while True:
-        startseconds = int(time.time)
+        startseconds = int(time.time())
         actualtemp = gettemp()
 
         if loopcount == 0:
             # Time to decide things
-            control = g_pidcontrol(actualtemp)
-            # Control is 0-100
-            heatminutes = (extloopintloops * control) / 100.0
+            setpoint_saved = g_setpoint
+            get_setpoint()
+            if setpoint_saved != g_setpoint:
+                create_pid()
+            command = g_pidcontrol(actualtemp)
+            # Command is 0-100
+            heatminutes = (extloopinnerloops * command) / 100.0
             if heatminutes < 5:
                 heatminutes = 0
+            if heatminutes > extloopinnerloops - 5:
+                heatminutes = extloopinnerloops
             if heatminutes > 0:
                 # Turn heater on
-        endseconds = int(time.time)
-        if endseconds - startseconds < loopperiod:
-            time.sleep(loopperiod - (endseconds - startseconds))
+                pioif.turnon()
+                heateron = True
+        elif loopcount == heatminutes:
+            # Time to turn heater off. Note that if heatminutes is
+            # >= extloopinloops, we don't turn off
+            pioif.turnoff()
+            heateron = False
+            
+        if (loopcount % 5) == 0:
+            # Log stuff every 5 minutes
+            ho = 1 if heateron else 0
+            p,i,d = g_pidcontrol.components
+            thermlog.logstate({'temp':actualtemp, 'set': g_setpoint, 'on': ho,
+                               'cmd': command, 'p' : p, 'i' : i, 'd': d})
+                               
+        endseconds = int(time.time())
+        if endseconds - startseconds < innerloopseconds:
+            time.sleep(innerloopseconds - (endseconds - startseconds))
         loopcount += 1
-        if loopcount > extloopintloops:
+        if loopcount >= extloopinnerloops:
             loopcount = 0
             
 if __name__ == '__main__':

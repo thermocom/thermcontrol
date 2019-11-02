@@ -63,25 +63,6 @@ def targetC(day=0):
     return target
 
 
-def pidw():
-    global g_pidfile
-    data = None
-    try:
-        with open(g_pidfile, 'r') as f:
-            data = f.read()
-    except:
-        pass
-    if data:
-        pid = data.strip()
-	pso = subprocess.check_output(['ps', '-e'])
-	beg = pid + ' '
-        for line in pso.split("\n"):
-            if line.startswith(beg):
-		logger.warning("Already running. pid: %s" % pid)
-		sys.exit(1)
-    with open(g_pidfile, 'w') as f:
-        print("%d" % os.getpid(), file=f)
-
 def init():
     # Give ntpd a little time to adjust the date.
     time.sleep(60)
@@ -101,10 +82,12 @@ def init():
 
     global g_templog
     g_templog = conf.get('templog')
-    global g_pidfile
-    g_pidfile = conf.get('pidfile')
-    if not g_pidfile:
-        g_pidfile = os.path.join(os.path.dirname(g_templog), 'climcave.pid')
+
+    pidfile = conf.get('pidfile')
+    if not pidfile:
+        pidfile = os.path.join(os.path.dirname(g_templog), 'climcave.pid')
+    utils.pidw(pidfile)
+    
     global g_idtempext
     g_idtempext = conf.get('idtempext')
     global g_idtempint
@@ -131,7 +114,6 @@ def init():
         global pioif
         import pioif
         pioif.init(gpio_pin)
-    pidw()
 
 
 
