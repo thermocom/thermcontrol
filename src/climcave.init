@@ -14,7 +14,7 @@
 #                   
 ### END INIT INFO
 
-climbin=/home/dockes/thermostat/src
+climbin=/home/dockes/thermcontrol/src
 climuid=dockes
 
 CLIMCAVE_CONFIG=/home/dockes/.climcave_config

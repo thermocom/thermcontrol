@@ -12,7 +12,7 @@ idtempext = 10.A46B7D020800
 idtempint = 10.155DC1000800
 
 # Pin 16, BCM 23
-fan_pin = 16
+gpio_pin = 16
 
 # Not used because using_t2ss is not set. The t2ss is dead
 idctl1 = 12.C5440E000000

@@ -29,19 +29,19 @@ def fanon():
     if g_using_t2ss:
         t2ssif.fanon()
     else:
-        pioif.fanon()
+        pioif.turnon()
 
 def fanoff():
     if g_using_t2ss:
         t2ssif.fanoff()
     else:
-        pioif.fanoff()
+        pioif.turnoff()
 
 def fanstate():
     if g_using_t2ss:
         return t2ssif.fanstate()
     else:
-        return pioif.fanstate()
+        return pioif.state()
 
 def turnoffandsleep(s):
     global g_loopsleepsecs
@@ -124,13 +124,13 @@ def init():
         import t2ssif
         t2ssif.init(idctl1)
     else:
-        fan_pin = int(conf.get("fan_pin"))
-        if not fan_pin:
-            logger.critical("No fan_pin defined in configuration")
+        gpio_pin = int(conf.get("gpio_pin"))
+        if not gpio_pin:
+            logger.critical("No gpio_pin defined in configuration")
             sys.exit(1)
         global pioif
         import pioif
-        pioif.init(fan_pin)
+        pioif.init(gpio_pin)
     pidw()
 
 

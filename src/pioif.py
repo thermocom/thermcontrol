@@ -34,8 +34,8 @@ except Exception as err:
 
 # We do things in several executions. A channel already setup is normal
 def init(pin):
-    global fan_pin
-    fan_pin = pin
+    global gpio_pin
+    gpio_pin = pin
     GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BOARD)
     setup_gpio()
@@ -43,43 +43,43 @@ def init(pin):
 def setup_gpio():
     try:
         if machine == "rpi":
-            GPIO.setup(fan_pin, GPIO.OUT, initial=GPIO.HIGH)
+            GPIO.setup(gpio_pin, GPIO.OUT, initial=GPIO.HIGH)
         else:
-            GPIO.setup(fan_pin, GPIO.OUT)
-            GPIO.output(fan_pin, True)
+            GPIO.setup(gpio_pin, GPIO.OUT)
+            GPIO.output(gpio_pin, True)
     except Exception as e:
         logger.exception("setup_gpio failed", hp)
         raise e
 
 def reset_gpio():
     try:
-        GPIO.cleanup((fan_pin,))
+        GPIO.cleanup((gpio_pin,))
     except Exception as e:
-        logger.exception("reset_gpio pin %d failed", fan_pin)
+        logger.exception("reset_gpio pin %d failed", gpio_pin)
         raise e
         
-def fanon():
+def turnon():
     try:
-        GPIO.output(fan_pin, False)
+        GPIO.output(gpio_pin, False)
     except Exception as e:
-        logger.exception("fanon pin %d failed", fan_pin)
+        logger.exception("turnnon pin %d failed", gpio_pin)
         raise e
 
-def fanoff():
+def turnoff():
     try:
-        GPIO.output(fan_pin, True)
+        GPIO.output(gpio_pin, True)
     except Exception as e:
-        logger.exception("fanoff pin %d failed", fan_pin)
+        logger.exception("turnoff pin %d failed", gpio_pin)
         raise e
 
-def fanstate():
+def state():
     try:
-        if GPIO.input(fan_pin):
+        if GPIO.input(gpio_pin):
             return 0
         else:
             return 1
     except Exception as e:
-        logger.exception("fanstate pin %d failed", fan_pin)
+        logger.exception("state pin %d failed", gpio_pin)
         raise e
 
 ##########
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     def usage():
         perr("pioif.py: Usage: pioif.py pin <cmd>")
         perr("cmd:")
-        perr("  reset, fanon, fanoff, fanstate")
+        perr("  reset, turnon, turnoff, state")
         sys.exit(1)
     if len(sys.argv) <= 2:
         usage()
@@ -101,12 +101,12 @@ if __name__ == '__main__':
         perr("cmd %s" % cmd)
         if cmd == "reset":
             reset_gpio()
-        elif cmd == "fanon":
-            fanon()
-        elif cmd == "fanoff":
-            fanoff()
-        elif cmd == "fanstate":
-            print("pin state %d" % fanstate())
+        elif cmd == "turnon":
+            turnon()
+        elif cmd == "turnoff":
+            turnoff()
+        elif cmd == "state":
+            print("pin state %d" % state())
         else:
             usage()
     

@@ -7,12 +7,9 @@ import os
 
 logger = logging.getLogger(__name__)
 
-def init(conf):
+def init(datarepo):
     global g_datarepo
-    g_datarepo = conf.get('datarepo')
-    if not g_datarepo:
-        logger.critical("No 'datarepo' param in configuration")
-        raise Exception("No 'datarepo' param in configuration")
+    g_datarepo = datarepo
     global g_gitcmd
     g_gitcmd = ['git',
                 '--work-tree=' + g_datarepo,
@@ -69,12 +66,16 @@ def send_updates():
     
 ##########
 if __name__ == '__main__':
+    def perr(s):
+        print("%s"%s, file=sys.stderr)
     logging.basicConfig()
     import conftree
     conf = conftree.ConfSimple("therm_config")
-    init(conf)
-    def perr(s):
-        print("%s"%s, file=sys.stderr)
+    datarepo = conf.get('datarepo')
+    if not datarepo:
+        perr("No 'datarepo' param in configuration")
+        sys.exit(1)
+    init(datarepo)
     def usage():
         perr("Usage: gitif.py <cmd>")
         perr("cmd:")
