@@ -23,6 +23,13 @@ def logstate(values):
     tm = datetime.datetime.now().strftime('%Y-%m-%d/%H:%M:%S')
 
     logfilename = os.path.join(g_datarepo, day + "-templog")
+
+    # round down float precision to limit size of printed data
+    for k in values.keys():
+        v = values[k]
+        if isinstance(v, float):
+            values[k] = round(v, 2)
+    
     data = [tm, values]
     line = json.dumps(data)
     try:

@@ -5,6 +5,7 @@ import os
 import sys
 import logging
 import time
+import threading
 
 import conftree
 import owif
@@ -70,6 +71,25 @@ def init():
 def get_setpoint():
     global g_setpoint
     g_setpoint = gitif.fetch_setpoint()
+
+
+def tell_the_world():
+    gitif.send_updates()
+    
+last_world_update = 0
+update_thread = None
+publish_interval = 6 * 3600
+def maybe_tell_the_world():
+    global last_world_update, update_thread, publish_interval
+    now = time.time()
+    if now < last_world_update + publish_interval:
+        return
+    if update_thread and update_thread.isAlive():
+        log.info("maybe_tell_the_world: previous update not done")
+        return
+    last_world_update = now
+    update_thread = threading.Thread(target=tell_the_world)
+    update_thread.start()
     
 def create_pid():
     global g_pidcontrol
@@ -102,12 +122,26 @@ def main():
     heatminutes = 0
     command = 0.0
     heateron = False
+    temperrorcnt = 0
     while True:
         startseconds = int(time.time())
-        actualtemp = gettemp()
 
+        try:
+            actualtemp = gettemp()
+        except:
+            logger.error("Could not get temp")
+            temperrorcnt += 1
+            if temperrorcnt < 5:
+                time.sleep(minute)
+                continue
+            else:
+                # Exit and let upper layers handle the situation (reboot?)
+                logger.critical("Too many temp reading errors, exiting")
+                sys.exit(1)
+        temperrorcnt = 0
+        
         if loopcount == 0:
-            # Time to decide things
+            # Call PID to decide the heating duration for the next half hour
             setpoint_saved = g_setpoint
             get_setpoint()
             if setpoint_saved != g_setpoint:
@@ -125,7 +159,7 @@ def main():
                 heateron = True
         elif loopcount == heatminutes:
             # Time to turn heater off. Note that if heatminutes is
-            # >= extloopinloops, we don't turn off
+            # >= extloopinloops, we don't turn off during this cycle
             pioif.turnoff()
             heateron = False
             
@@ -135,13 +169,19 @@ def main():
             p,i,d = g_pidcontrol.components
             thermlog.logstate({'temp':actualtemp, 'set': g_setpoint, 'on': ho,
                                'cmd': command, 'p' : p, 'i' : i, 'd': d})
-                               
+
+        # Publish our state from time to time. 
+        maybe_tell_the_world()
+        
         endseconds = int(time.time())
         if endseconds - startseconds < innerloopseconds:
             time.sleep(innerloopseconds - (endseconds - startseconds))
         loopcount += 1
         if loopcount >= extloopinnerloops:
             loopcount = 0
-            
+
+    # End mainloop
+
+    
 if __name__ == '__main__':
     main()

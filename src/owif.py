@@ -18,23 +18,38 @@ except Exception as e:
 # Utility: the ids used by the TCL code are reverted and include the
 # ck at the beginning and the family at the end. e.g:
 # '160008027D6BA410'
-def id_tcl_to_ow(tclid):
-    tp = tclid[14:16]
-    id = ''
-    for i in range(6):
-        base = 2 + 2 * (6-i) - 2
-        id += tclid[base : base+2]
-    return tp + '.' + id
+#
+# And by the way, the ids in /sys/bus/w1/devices and the ones used by
+# owfs have inverse byte orders, but can be distinguished by the
+# period vs dash
+# /sys/bus/w1/devices/ : 28-0300a2792076
+# /run/owfs/ :           28.762079A20003 
+def id_ow(inid):
+    outid = ''
+    if len(inid) == 16:
+        # Old tcl one
+        tp = inid[14:16]
+        outid = tp + '.'
+        for i in range(6):
+            base = 2 + 2 * (6-i) - 2
+            outid += inid[base : base+2]
+    elif inid[2] == '-':
+        outid = inid[0:2] + '.'
+        for i in range(6):
+            base = 3 + 2 * (6-i) - 2
+            outid += inid[base : base+2].upper()
+    else:
+        outid = inid
+    return outid
 
 def createSensor(id):
-    if len(id) == 16:
-        id = id_tcl_to_ow(sensorid)
-    return ow.Sensor('/' + id)
+    return ow.Sensor('/' + id_ow(id))
 
 # Return temperature as float
 def readtemp(sensorid):
     try:
         sensor = createSensor(sensorid)
+        #print("SENSOR: %s : %s" % (sensor, sensor.entryList()),file=sys.stderr)
         logger.debug("readtemp %s -> %s", sensorid, sensor.temperature)
         return float(sensor.temperature)
     except Exception as e:

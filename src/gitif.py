@@ -59,7 +59,7 @@ def send_updates():
         return
     if not _try_run_git(g_gitcmd + ['add', '.']):
         return
-    if not _try_run_git(g_gitcmd + ['commit', '-m', 'n']):
+    if not _try_run_git(g_gitcmd + ['commit', '-q', '-m', 'n']):
         return
     _try_run_git(g_gitcmd + ['push', '-q'])
 
