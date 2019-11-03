@@ -1,0 +1,16 @@
+[Unit]
+Description=PID Thermostat 
+After=time-sync.target
+
+[Service]
+Restart=on-failure
+RestartSec=30
+Environment=THERM_CONFIG=/home/dockes/.therm_config
+ExecStart=/usr/bin/python /home/dockes/thermcontrol/src/thermostat.py
+WorkingDirectory=/home/dockes/thermdata
+SyslogIdentifier=Thermostat
+User=dockes
+Group=pi
+
+[Install]
+WantedBy=multi-user.target
