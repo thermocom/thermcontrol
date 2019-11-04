@@ -17,7 +17,7 @@ def initlog(conf):
              4:logging.INFO, 5:logging.DEBUG}
     loglevel = llmap[loglevel] if loglevel in llmap else logging.WARNING
     logging.basicConfig(filename=logfilename, level=loglevel,
-                        format='%(name)s:%(lineno)d::%(message)s')
+                        format='%(asctime)s - %(name)s:%(lineno)d: %(message)s')
 
 def pidw(pidfile):
     data = None

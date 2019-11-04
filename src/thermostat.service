@@ -1,11 +1,14 @@
 [Unit]
 Description=PID Thermostat 
-After=time-sync.target
+After=time-sync.target network-online.target
+Wants= network-online.target
 
 [Service]
 Restart=on-failure
 RestartSec=30
 Environment=THERM_CONFIG=/home/dockes/.therm_config
+# If the wait for network-online above and as it seems flaky:
+ExecStartPre=/bin/bash -c 'until host github.com; do sleep 1; done'
 ExecStart=/usr/bin/python /home/dockes/thermcontrol/src/thermostat.py
 WorkingDirectory=/home/dockes/thermdata
 SyslogIdentifier=Thermostat

@@ -5,7 +5,7 @@ logfilename = /home/dockes/pyclimcave/logclimcave
 #1:CRITICAL, 2:ERROR, 3:WARNING, 4:INFO, 5:DEBUG
 loglevel = 3
 
-templog = /home/dockes/pyclimcave/templog
+templog = /home/dockes/pyclimcave/tempcave.log
 
 # Ids for the HA5-connected DS1820
 idtempext = 10.A46B7D020800

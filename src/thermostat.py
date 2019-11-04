@@ -124,7 +124,7 @@ def main():
     heateron = False
     temperrorcnt = 0
     while True:
-        startseconds = int(time.time())
+        startseconds = time.time()
 
         try:
             actualtemp = gettemp()
@@ -173,9 +173,10 @@ def main():
         # Publish our state from time to time. 
         maybe_tell_the_world()
         
-        endseconds = int(time.time())
-        if endseconds - startseconds < innerloopseconds:
-            time.sleep(innerloopseconds - (endseconds - startseconds))
+        sleepsecs = innerloopseconds - (time.time() - startseconds)
+        if sleepsecs > 0:
+            logger.debug("Sleeping %s seconds", sleepsecs)
+            time.sleep(sleepsecs)
         loopcount += 1
         if loopcount >= extloopinnerloops:
             loopcount = 0

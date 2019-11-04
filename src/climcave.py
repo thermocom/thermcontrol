@@ -20,7 +20,7 @@ def logstate(exC, inC, fanB):
             datestring = datetime.datetime.now().strftime('%Y-%m-%d/%H:%M:%S')
             tC = targetC()
             fanB = int(fanB) + 14
-            print("%s %.2f %.2f %.2f %d" % (datestring, tC, exC, inC, fanB),
+            print("%s\t%.2f\t%.2f\t%.2f\t%d" % (datestring, tC, exC, inC, fanB),
                   file=f)
     except:
         logger.exception("Logging temp error")
