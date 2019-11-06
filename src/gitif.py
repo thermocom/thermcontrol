@@ -17,27 +17,26 @@ def init(datarepo):
                 ]
 
 def fetch_setpoint():
-    defaultvalue = 10.0
     cmd = g_gitcmd + ['pull', '-q']
     try:
         subprocess.check_call(cmd)
     except:
         logger.exception("git command failed: %s", cmd)
-        return defaultvalue
+        return None
     tempfile = os.path.join(g_datarepo, "consigne")
     try:
         with open(tempfile, 'r') as f:
             temp = f.read().strip()
     except:
         logger.exception("Could not read %s", tempfile)
-        return defaultvalue
+        return None
     try:
         value = float(temp)
         if value < 5.0 or value > 22.0:
             raise Exception("Bad set point %s" % temp)
     except:
         logger.exception("Bad contents in tempfile")
-        return defaultvalue
+        return None
     return value
 
 def _try_run_git(cmd):

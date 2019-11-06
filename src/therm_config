@@ -1,8 +1,9 @@
 # Fichier installe comme /home/dockes/.therm_config sur le pi0
 
-logfilename = /home/dockes/thermdata/logtherm
+logfilename = /home/dockes/logtherm
+
 #1:CRITICAL, 2:ERROR, 3:WARNING, 4:INFO, 5:DEBUG
-loglevel = 3
+loglevel = 5
 
 # Ids for the HA5-connected DS1820
 housetempids = 28.762079A20003
@@ -12,3 +13,4 @@ gpio_pin = 16
 
 datarepo = /home/dockes/thermdata
 
+using_pid = 1
