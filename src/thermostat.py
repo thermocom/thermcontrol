@@ -87,15 +87,18 @@ class SetpointGetter(object):
     def __init__(self):
         self.safetemp = 10.0
         self.setpointfromgit = None
-        self.lastfetch = 0
+        self.lasttime = 0
         # Fetch every 2 hours.
         self.fetchinterval = 2*60*60
     def get(self):
         now = time.time()
+        logger.debug("SetpointGetter: get. setpointfromgit %s",
+                     self.setpointfromgit)
         if self.setpointfromgit is None or \
-               now - self.lasttime > self.fetchinterval:
+               now  > self.lasttime + self.fetchinterval:
             logger.debug("Fetching setpoint")
             self.setpointfromgit = gitif.fetch_setpoint()
+            logger.debug("SetpointGetter: got %s", self.setpointfromgit)
             self.lasttime = now
         return self.setpointfromgit or self.safetemp
 
@@ -104,22 +107,25 @@ setpoint_getter = SetpointGetter()
 ### Publishing the logs to the origin repo
 def tell_the_world():
     gitif.send_updates()
-    
-last_world_update = 0
-update_thread = None
-publish_interval = 6 * 3600
-def maybe_tell_the_world():
-    global last_world_update, update_thread, publish_interval
-    now = time.time()
-    if now < last_world_update + publish_interval:
-        return
-    if update_thread and update_thread.isAlive():
-        log.info("maybe_tell_the_world: previous update not done")
-        return
-    last_world_update = now
-    update_thread = threading.Thread(target=tell_the_world)
-    update_thread.start()
-    
+
+class Publisher(object):
+    def __init__(self):
+        self.last_world_update = 0
+        self.update_thread = None
+        self.publish_interval = 6 * 3600
+    def maybe_tell_the_world(self, force=False):
+        now = time.time()
+        if not force and (now < self.last_world_update + self.publish_interval):
+            return
+        if self.update_thread and self.update_thread.isAlive():
+            log.info("maybe_tell_the_world: previous update not done")
+            return
+        self.last_world_update = now
+        self.update_thread = threading.Thread(target=tell_the_world)
+        self.update_thread.start()
+
+world_publisher = Publisher()
+
 
 #### Build a PID controller
 def create_pid(setpoint):
@@ -158,6 +164,7 @@ def trygettemp():
 
 
 def pidloop():
+    global world_publisher
     minute = 60
     # We loop every minute to test things to do (maybe log, turn off
     # heater or whatever)
@@ -188,6 +195,7 @@ def pidloop():
         setpoint_saved = setpoint
         setpoint = setpoint_getter.get()
         if setpoint_saved != setpoint or not mypidctl:
+            world_publisher.maybe_tell_the_world(force=True)
             mypidctl = create_pid(setpoint)
             logger.debug("PID tunings: Kp %.2f Ki %.2f Kd %.2f" %
                          mypidctl.tunings)
@@ -220,8 +228,8 @@ def pidloop():
             thermlog.logstate({'temp':actualtemp, 'set': setpoint, 'on': ho,
                                'cmd': command, 'p' : p, 'i' : i, 'd': d})
 
-        # Publish our state (git push) from time to time. 
-        maybe_tell_the_world()
+        # Publish our state (git push) from time to time.
+        world_publisher.maybe_tell_the_world()
         
         sleepsecs = fastloopseconds - (time.time() - startseconds)
         if sleepsecs > 0:
@@ -235,14 +243,17 @@ def pidloop():
 
 
 def onoffloop():
-    global g_hysteresis
+    global g_hysteresis, world_publisher
 
     # We never switch on or off for less than 10 minutes.
     cycleminutes = 10
     pioif.turnoff()
     onoff = 0
     while True:
+        setpoint_saved = setpoint
         setpoint = setpoint_getter.get()
+        if setpoint_saved != setpoint:
+            world_publisher.maybe_tell_the_world(force=True)
             
         # trygettemp will have us exit if there are too many
         # errors. The watchdog will then notice and reboot
@@ -263,6 +274,8 @@ def onoffloop():
 
         logger.debug("onoffloop: temp %.2f setpoint %.2f on %d",
                      actualtemp, setpoint, onoff)
+        # Publish our state (git push) from time to time. 
+        world_publisher.maybe_tell_the_world()
         time.sleep(cycleminutes * 60)
 
     # End onoff loop
