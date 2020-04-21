@@ -28,12 +28,12 @@ def pidw(pidfile):
         pass
     if data:
         pid = data.strip()
-	pso = subprocess.check_output(['ps', '-e'])
-	beg = pid + ' '
+        pso = subprocess.check_output(['ps', '-e'])
+        beg = pid + ' '
         for line in pso.split("\n"):
             if line.startswith(beg):
-		logger.warning("Already running. pid: %s" % pid)
-		sys.exit(1)
+                logger.warning("Already running. pid: %s" % pid)
+                sys.exit(1)
     with open(pidfile, 'w') as f:
         print("%d" % os.getpid(), file=f)
 

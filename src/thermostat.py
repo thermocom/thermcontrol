@@ -51,7 +51,16 @@ def init():
     if not datarepo:
         logger.critical("No 'datarepo' param in configuration")
         sys.exit(1)
-        
+
+    global g_uisettingfile, g_tempscratch
+    scratchdir = conf.get('scratchdir')
+    if scratchdir:
+        g_uisettingfile = os.path.join(scratchdir, 'ui')
+        g_tempscratch = os.path.join(scratchdir, 'ctl')
+    else:
+        g_uisettingfile = None
+        g_tempscratch = None
+    
     gitif.init(datarepo)
     thermlog.init(datarepo)
 
@@ -90,7 +99,19 @@ class SetpointGetter(object):
         self.lasttime = 0
         # Fetch every 2 hours.
         self.fetchinterval = 2*60*60
+        self.giterrorcnt = 0
+        self.maxgiterrors = 60
+        
     def get(self):
+        # Always check for a local setting, it overrides the remote
+        if g_uisettingfile and os.path.exists(g_uisettingfile):
+            try:
+                cf = conftree.ConfSimple(g_uisettingfile)
+                tmp = cf.get('localsetting')
+                if tmp:
+                    return float(tmp)
+            except:
+                pass
         now = time.time()
         logger.debug("SetpointGetter: get. setpointfromgit %s",
                      self.setpointfromgit)
@@ -98,6 +119,15 @@ class SetpointGetter(object):
                now  > self.lasttime + self.fetchinterval:
             logger.debug("Fetching setpoint")
             self.setpointfromgit = gitif.fetch_setpoint()
+            if not self.setpointfromgit:
+                self.giterrorcnt += 1
+            else:
+                self.giterrorcnt = 0
+            if self.giterrorcnt >= self.maxgiterrors:
+                # Let the watchdog handle this
+                logger.critical("Too many git pull errors, exiting")
+                pioif.turnoff()
+                sys.exit(1)
             logger.debug("SetpointGetter: got %s", self.setpointfromgit)
             self.lasttime = now
         return self.setpointfromgit or self.safetemp
@@ -143,7 +173,14 @@ def gettemp():
     temp = 0.0
     for id in g_housetempids:
         temp += owif.readtemp(id)
-    return temp / len(g_housetempids)
+    temp = temp / len(g_housetempids)
+    if g_tempscratch:
+        try:
+            with open(g_tempscratch, 'w') as f:
+                print("measuredtemp = %.2f" % temp, file=f)
+        except:
+            pass
+    return temp
 
 temperrorcnt = 0
 def trygettemp():
