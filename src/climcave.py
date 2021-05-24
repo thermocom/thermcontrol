@@ -1,5 +1,5 @@
-#!/usr/bin/python
-from __future__ import print_function
+#!/usr/bin/python3
+
 import os
 import sys
 import logging
@@ -67,27 +67,13 @@ def init():
     # Give ntpd a little time to adjust the date.
     time.sleep(60)
     
-    envconfname = 'CLIMCAVE_CONFIG'
-    confname = None
-    if envconfname in os.environ:
-        confname = os.environ[envconfname]
-    if not confname:
-        raise Exception("NO %s in environment" % envconfname)
-
-    conf = conftree.ConfSimple(confname)
-
-    utils.initlog(conf)
+    conf = utils.initcommon('CLIMCAVE_CONFIG')
     global logger
     logger = logging.getLogger(__name__)
 
     global g_templog
     g_templog = conf.get('templog')
 
-    pidfile = conf.get('pidfile')
-    if not pidfile:
-        pidfile = os.path.join(os.path.dirname(g_templog), 'climcave.pid')
-    utils.pidw(pidfile)
-    
     global g_idtempext
     g_idtempext = conf.get('idtempext')
     global g_idtempint
@@ -111,9 +97,9 @@ def init():
         if not gpio_pin:
             logger.critical("No gpio_pin defined in configuration")
             sys.exit(1)
+        from pioif import PioIf
         global pioif
-        import pioif
-        pioif.init(gpio_pin)
+        pioif = pioif.PioIf(gpio_pin)
 
 
 

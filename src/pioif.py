@@ -1,11 +1,12 @@
-#!/usr/bin/env python
-from __future__ import print_function
+#!/usr/bin/env python3
 
 # Interface for controlling the KUBII relays through the PIO
 #
 # The Kubii relays we are using are active (switched) when the input
 # is shorted to ground, inactive when high impedance or high, so the
 # command names and actual GPIO outputs are inverted.
+#
+# On the pi, needs the python3-rpi.gpio package (apt)
 
 import sys
 import time
@@ -32,55 +33,61 @@ except Exception as err:
     logger.critical("Error importing RPi.GPIO!: %s", err)
     sys.exit(1)
 
-# We do things in several executions. A channel already setup is normal
-def init(pin):
-    global gpio_pin
-    gpio_pin = pin
-    GPIO.setwarnings(False)
-    GPIO.setmode(GPIO.BOARD)
-    setup_gpio()
+class PioIf(object):
+    # We do things in several executions. A channel already setup is normal
+    def __init__(self, pin):
+        self.gpio_pin = pin
+        GPIO.setwarnings(False)
+        # GPIO.BCM would tell the interface to use chip pin numbers, not connector
+        # ones. The latter are more convenient but there are bugs
+        # forbidding using pins beyond 26 ! This was supposedly fixed
+        # in release 0.5.7 of the python module, but I still can get
+        # it to work !
+        # To be checked. thermcontrol and climcave work with board pin
+        # numbers, the bcm was for the proto with more relays which
+        # needed more pins
+        GPIO.setmode(GPIO.BOARD)
+        #GPIO.setmode(GPIO.BCM)
+        self.setup_gpio()
     
-def setup_gpio():
-    try:
-        if machine == "rpi":
-            GPIO.setup(gpio_pin, GPIO.OUT, initial=GPIO.HIGH)
-        else:
-            GPIO.setup(gpio_pin, GPIO.OUT)
-            GPIO.output(gpio_pin, True)
-    except Exception as e:
-        logger.exception("setup_gpio failed", hp)
-        raise e
+    def setup_gpio(self):
+        try:
+            if machine == "rpi":
+                GPIO.setup(self.gpio_pin, GPIO.OUT, initial=GPIO.HIGH)
+            else:
+                GPIO.setup(self.gpio_pin, GPIO.OUT)
+                GPIO.output(self.gpio_pin, True)
+        except Exception as e:
+            logger.exception("setup_gpio pin %d failed", self.gpio_pin)
+            raise e
 
-def reset_gpio():
-    try:
-        GPIO.cleanup((gpio_pin,))
-    except Exception as e:
-        logger.exception("reset_gpio pin %d failed", gpio_pin)
-        raise e
+    def reset_gpio(self):
+        try:
+            GPIO.cleanup((self.gpio_pin,))
+        except Exception as e:
+            logger.exception("reset_gpio pin %d failed", self.gpio_pin)
+            raise e
         
-def turnon():
-    try:
-        GPIO.output(gpio_pin, False)
-    except Exception as e:
-        logger.exception("turnnon pin %d failed", gpio_pin)
-        raise e
+    def turnon(self):
+        try:
+            GPIO.output(self.gpio_pin, False)
+        except Exception as e:
+            logger.exception("turnon pin %d failed", self.gpio_pin)
+            raise e
 
-def turnoff():
-    try:
-        GPIO.output(gpio_pin, True)
-    except Exception as e:
-        logger.exception("turnoff pin %d failed", gpio_pin)
-        raise e
+    def turnoff(self):
+        try:
+            GPIO.output(self.gpio_pin, True)
+        except Exception as e:
+            logger.exception("turnoff pin %d failed", self.gpio_pin)
+            raise e
 
-def state():
-    try:
-        if GPIO.input(gpio_pin):
-            return 0
-        else:
-            return 1
-    except Exception as e:
-        logger.exception("state pin %d failed", gpio_pin)
-        raise e
+    def state(self):
+        try:
+            return 0 if GPIO.input(self.gpio_pin) else 1
+        except Exception as e:
+            logger.exception("state pin %d failed", self.gpio_pin)
+            raise e
 
 ##########
 if __name__ == '__main__':
@@ -89,24 +96,24 @@ if __name__ == '__main__':
     def usage():
         perr("pioif.py: Usage: pioif.py pin <cmd>")
         perr("cmd:")
-        perr("  reset, turnon, turnoff, state")
+        perr("  reset, on, off, state")
         sys.exit(1)
     if len(sys.argv) <= 2:
         usage()
     pin = int(sys.argv[1])
     cmds = sys.argv[2].split()
     perr("pin %d" % pin)
-    init(pin)
+    pioif = PioIf(pin)
     for cmd in cmds:
         perr("cmd %s" % cmd)
         if cmd == "reset":
-            reset_gpio()
-        elif cmd == "turnon":
-            turnon()
-        elif cmd == "turnoff":
-            turnoff()
+            pioif.reset_gpio()
+        elif cmd == "on":
+            pioif.turnon()
+        elif cmd == "off":
+            pioif.turnoff()
         elif cmd == "state":
-            print("pin state %d" % state())
+            print("pin state %d" % pioif.state())
         else:
             usage()
     

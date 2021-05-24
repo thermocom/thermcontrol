@@ -35,6 +35,7 @@ class ConfSimple(object):
 
     def __init__(self, confname, tildexp = False, readonly = True):
         self.submaps = {}
+        self.subkeys_unsorted = []
         self.dotildexpand = tildexp
         self.readonly = readonly
         self.confname = confname
@@ -81,6 +82,7 @@ class ConfSimple(object):
                 else:
                     submapkey = line
                 #_debug("Submapkey: [%s]" % submapkey)
+                self.subkeys_unsorted.append(submapkey)
                 continue
 
             nm, sep, value = line.partition(b'=')
@@ -95,6 +97,9 @@ class ConfSimple(object):
                 self.submaps[submapkey] = {}
             self.submaps[submapkey][nm] = value
 
+    def getSubKeys_unsorted(self):
+        return [k.decode('utf-8') for k in self.subkeys_unsorted]
+    
     def getbin(self, nm, sk = b''):
         '''Returns None if not found, empty string if found empty'''
         if type(nm) != type(b'') or type(sk) != type(b''):
@@ -115,7 +120,7 @@ class ConfSimple(object):
             sk = sk.encode('utf-8')
         #v = ConfSimple.getbin(self, nm, sk)
         v = self.getbin(nm, sk)
-        if v and dodecode:
+        if v is not None and dodecode:
             v = v.decode('utf-8')
         return v
 
@@ -219,7 +224,7 @@ class ConfTree(ConfSimple):
 class ConfStack(object):
     """ A ConfStack manages the superposition of a list of Configuration
     objects. Values are looked for in each object from the list until found.
-    This typically provides for defaults overriden by sparse values in the
+    This typically provides for defaults overridden by sparse values in the
     topmost file."""
 
     def __init__(self, nm, dirs, tp = 'simple'):
@@ -257,7 +262,7 @@ class ConfStack(object):
             sk = sk.encode('utf-8')
         #v = ConfSimple.getbin(self, nm, sk)
         v = self.getbin(nm, sk)
-        if v and dodecode:
+        if v is not None and dodecode:
             v = v.decode('utf-8')
         return v
 

@@ -12,7 +12,7 @@ g_datarepo = '/home/dockes/projets/rpi-control/thermostat/thermdata'
 def perr(s):
     print("%s"%s, file=sys.stderr)
 def usage():
-    perr("Usage: thermdatatoplot.py")
+    perr("Usage: thermdatatoplot.py [YYY-MM-DD]")
     sys.exit(1)
 
 g_gitcmd = ['git',
@@ -34,7 +34,11 @@ else:
 for fn in sorted(fnlist):
     with open(fn, 'r') as f:
         for line in f:
-            l = json.loads(line)
+            try:
+                l = json.loads(line)
+            except Exception as ex:
+                perr("json.loads failed for [%s]"%line)
+                continue
             date = l[0]
             temp = l[1]['temp']
             print("%s\t%s" % (date, temp), file=tmpfile.file)

@@ -9,10 +9,9 @@ import threading
 
 import conftree
 import owif
-import pioif
 import utils
 import PID
-import gitif
+import gitele
 import thermlog
 
 # Main heating sequence in seconds: one half-hour
@@ -22,34 +21,14 @@ def init():
     # Give ntpd a little time to adjust the date.
 #    time.sleep(60)
 
-    envconfname = 'THERM_CONFIG'
-    confname = None
-    if envconfname in os.environ:
-        confname = os.environ[envconfname]
-    if not confname:
-        raise Exception("NO %s in environment" % envconfname)
-
-    conf = conftree.ConfSimple(confname)
-
-    utils.initlog(conf)
+    conf = utils.initcommon('THERM_CONFIG')
     global logger
     logger = logging.getLogger(__name__)
-
-    # Pid here is the process id, nothing to do with the control loop
-    pidfile = conf.get('pidfile')
-    if not pidfile:
-        pidfile = '/tmp/thermostat.pid'
-    utils.pidw(pidfile)
 
     global g_housetempids
     g_housetempids = conf.get('housetempids').split()
     if not g_housetempids:
         logger.critical("No housetempids defined in configuration")
-        sys.exit(1)
-
-    datarepo = conf.get('datarepo')
-    if not datarepo:
-        logger.critical("No 'datarepo' param in configuration")
         sys.exit(1)
 
     global g_uisettingfile, g_tempscratch
@@ -60,15 +39,18 @@ def init():
     else:
         g_uisettingfile = None
         g_tempscratch = None
-    
-    gitif.init(datarepo)
-    thermlog.init(datarepo)
+
+    global gitif
+    gitif = gitele.Gitele(conf)
+    thermlog.init(gitif.getrepo())
 
     gpio_pin = int(conf.get("gpio_pin"))
     if not gpio_pin:
         logger.critical("No fan_pin defined in configuration")
         sys.exit(1)
-    pioif.init(gpio_pin)
+    from pioif import PioIf as PioIf
+    global pioif
+    pioif = PioIf(gpio_pin)
 
     # Are we using a PID controller or an on/off
     global g_using_pid, g_heatingperiod
@@ -91,7 +73,6 @@ def init():
         global g_hysteresis
         g_hysteresis = float(conf.get('hysteresis') or 0.5)
 
-
 class SetpointGetter(object):
     def __init__(self):
         self.safetemp = 10.0
@@ -102,6 +83,28 @@ class SetpointGetter(object):
         self.giterrorcnt = 0
         self.maxgiterrors = 60
         
+    def _fetch_setpoint(self):
+        try:
+            gitif.pull()
+        except Exception as e:
+            logger.exception("git command failed: %s", e)
+            return None
+        tempfile = os.path.join(gitif.getrepo(), "consigne")
+        try:
+            with open(tempfile, 'r') as f:
+                temp = f.read().strip()
+        except:
+            logger.exception("Could not read %s", tempfile)
+            return None
+        try:
+            value = float(temp)
+            if value < 5.0 or value > 22.0:
+                raise Exception("Bad set point %s" % temp)
+        except:
+            logger.exception("Bad contents in tempfile")
+            return None
+        return value
+
     def get(self):
         # Always check for a local setting, it overrides the remote
         if g_uisettingfile and os.path.exists(g_uisettingfile):
@@ -118,7 +121,7 @@ class SetpointGetter(object):
         if self.setpointfromgit is None or \
                now  > self.lasttime + self.fetchinterval:
             logger.debug("Fetching setpoint")
-            self.setpointfromgit = gitif.fetch_setpoint()
+            self.setpointfromgit = self._fetch_setpoint()
             if not self.setpointfromgit:
                 self.giterrorcnt += 1
             else:
@@ -136,7 +139,7 @@ setpoint_getter = SetpointGetter()
 
 ### Publishing the logs to the origin repo
 def tell_the_world():
-    gitif.send_updates()
+    gitif.push()
 
 class Publisher(object):
     def __init__(self):
