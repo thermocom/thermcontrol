@@ -1,3 +1,12 @@
+# Note: python-ow is Python2 only.
+# See the refs to newer bindings using owserver here:
+# https://github.com/owfs/owfs/issues/75
+
+# This module uses the python-ow module from the owfs project to access 1-Wire temperature sensors
+# https://github.com/owfs/owfs/
+# http://owfs.sourceforge.net/owpython.html
+
+# Note still needs python2 on the climcave odroid
 from __future__ import print_function
 
 import ow

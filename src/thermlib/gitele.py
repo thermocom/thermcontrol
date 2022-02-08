@@ -1,13 +1,21 @@
 #!/usr/bin/python3
 
+# A git-based remote control interface.
+# Not everything is used by thermostat.py at the moment: it just uses
+# the git push/pull methods, but manages the "consigne" file by itself
+# and does not use the "actions" methods which were intended for
+# things like, e.g. cycling power on a camera.
+
+from __future__ import print_function
+
 import logging
 import subprocess
 import sys
 import os
 import glob
 
-import utils
-import conftree
+import thermlib.utils
+import thermlib.conftree
 
 logger = logging.getLogger(__name__)
 

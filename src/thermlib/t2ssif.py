@@ -1,6 +1,9 @@
-#!/usr/bin/python
-
-from __future__ import print_function
+#!/usr/bin/python3
+#
+# Controlling a T2SS 2-channel I/O module, which can't be procurred any more, so this is history.
+# https://www.embeddeddatasystems.com/T2SS--2-Channel-IO-Module-1-Wire-Expansion-Card-Discontinued_p_34.html
+# Replaced by direct PIO control of a relay board, but we miss the feedback (sensing the actual
+# output from the relay)
 
 import logging
 import sys

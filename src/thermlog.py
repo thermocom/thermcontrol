@@ -1,5 +1,8 @@
+# Logging module for the thermostat.py temperature control program.
+
 from __future__ import print_function
 
+import sys
 import json
 import os
 import logging
@@ -41,7 +44,6 @@ def logstate(values):
 
 ##########
 if __name__ == '__main__':
-    import sys
     def perr(s):
         print("%s"%s, file=sys.stderr)
     logging.basicConfig()

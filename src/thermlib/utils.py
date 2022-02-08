@@ -1,9 +1,13 @@
 
+# Note still needs python2 on the climcave odroid
+from __future__ import print_function
+
 import logging
 import sys
 import os
 import subprocess
-import conftree
+
+from thermlib import conftree
 
 def initlog(conf):
     logfilename = conf.get('logfilename') or "/tmp/therm_log.txt"

@@ -1,4 +1,12 @@
-#!/usr/bin/python3
+#!/usr/bin/python
+
+# Climcave: control the cellar temperature by actionning the fans.
+
+# This needs Python2 because python-ow is only python2. See the comments at the top of
+# thermlib/owif.  for newer interfaces. Will become a problem when e.g. conftree gets compatibility
+# issues.
+
+from __future__ import print_function
 
 import os
 import sys
@@ -8,9 +16,9 @@ import datetime
 import time
 import subprocess
 
-import conftree
-import utils
-import owif
+import thermlib.conftree
+import thermlib.utils
+import thermlib.owif
 
 # Log the current temperatures and fan state.
 def logstate(exC, inC, fanB):

@@ -1,4 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/python2
+
+# Needs to be python2 for now because of owif (see comments in there).
+
 from __future__ import print_function
 
 import os
@@ -7,11 +10,11 @@ import logging
 import time
 import threading
 
-import conftree
-import owif
-import utils
-import PID
-import gitele
+from thermlib import conftree
+#from thermlib import owif
+from thermlib import utils
+from thermlib import PID
+from thermlib import gitele
 import thermlog
 
 # Main heating sequence in seconds: one half-hour
@@ -46,9 +49,9 @@ def init():
 
     gpio_pin = int(conf.get("gpio_pin"))
     if not gpio_pin:
-        logger.critical("No fan_pin defined in configuration")
+        logger.critical("No gpio_pin defined in configuration")
         sys.exit(1)
-    from pioif import PioIf as PioIf
+    from thermlib.pioif import PioIf as PioIf
     global pioif
     pioif = PioIf(gpio_pin)
 

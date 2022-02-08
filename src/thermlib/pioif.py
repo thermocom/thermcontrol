@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 
-# Interface for controlling the KUBII relays through the PIO
-#
-# The Kubii relays we are using are active (switched) when the input
-# is shorted to ground, inactive when high impedance or high, so the
-# command names and actual GPIO outputs are inverted.
-#
-# On the pi, needs the python3-rpi.gpio package (apt)
+from __future__ import print_function
 
+# Interface for controlling the KUBII relays through the PIO on a Raspberry PI or an Odroid C2
+#
+# The Kubii relays we are using are active (switched on) when the input is shorted to ground,
+# inactive when the pin is high impedance or high, so the command names and actual GPIO outputs are
+# inverted.
+#
+# On the Pi, needs the python3-rpi.gpio package (apt)
+#
+# The module defines a PioIf object which controls a single PIO pin. Multiple objects can be used
+# to control more pins
 import sys
 import time
 import logging
@@ -15,8 +19,8 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# the python "platform" module is not really helpful to determine the
-# machine type. Rely in /boot files instead
+# The python "platform" module is not really helpful to determine the
+# machine type. Rely on /boot files instead.
 if os.path.exists("/boot/meson64_odroidc2.dtb"):
     machine = "odroidc2"
 else:

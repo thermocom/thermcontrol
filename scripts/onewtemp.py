@@ -1,5 +1,8 @@
 #!/usr/bin/python3
 
+# Example script for using the direct Raspberry PI 1-wire interface (without owfs)
+# We don't use this at the moment.
+
 import logging
 
 logger = logging.getLogger(__name__)
