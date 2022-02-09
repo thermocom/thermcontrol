@@ -1,8 +1,4 @@
-#!/usr/bin/python2
-
-# Needs to be python2 for now because of owif (see comments in there).
-
-from __future__ import print_function
+#!/usr/bin/python3
 
 import os
 import sys

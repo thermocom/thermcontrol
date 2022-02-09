@@ -1,27 +1,20 @@
-# Note: python-ow is Python2 only.
-# See the refs to newer bindings using owserver here:
-# https://github.com/owfs/owfs/issues/75
+# Note: this used to be based on python-ow which is obsolete and Python2 only.
+# We now use pyownet
+# https://pyownet.readthedocs.io/en/latest/index.html
+# See https://github.com/owfs/owfs/issues/75 for another possibility
 
-# This module uses the python-ow module from the owfs project to access 1-Wire temperature sensors
-# https://github.com/owfs/owfs/
-# http://owfs.sourceforge.net/owpython.html
-
-# Note still needs python2 on the climcave odroid
-from __future__ import print_function
-
-import ow
+from pyownet import protocol
 import logging
 import sys
 
 logger = logging.getLogger(__name__)
 
 host = 'localhost'
-port = '4304'
+port = 4304
 try:
-    hp = host + ':' + port
-    ow.init(hp)
+    owproxy = protocol.proxy(host=host, port=port)
 except Exception as e:
-    logger.exception("ow.init(%s) failed", hp)
+    logger.exception("protocol.proxy(%s,%d) failed", host, port)
     raise e
 
 # Utility: the ids used by the TCL code are reverted and include the
@@ -51,16 +44,13 @@ def id_ow(inid):
         outid = inid
     return outid
 
-def createSensor(id):
-    return ow.Sensor('/' + id_ow(id))
-
 # Return temperature as float
-def readtemp(sensorid):
+def readtemp(id):
+    sensorid = id_ow(id)
     try:
-        sensor = createSensor(sensorid)
-        #print("SENSOR: %s : %s" % (sensor, sensor.entryList()),file=sys.stderr)
-        logger.debug("readtemp %s -> %s", sensorid, sensor.temperature)
-        return float(sensor.temperature)
+        stemp = owproxy.read('/' + sensorid + '/temperature')
+        logger.debug("readtemp %s -> %s", sensorid, stemp)
+        return float(stemp)
     except Exception as e:
         logger.exception("Could not read temperature from %s", sensorid)
         raise e

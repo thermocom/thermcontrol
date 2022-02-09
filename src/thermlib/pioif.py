@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-from __future__ import print_function
-
 # Interface for controlling the KUBII relays through the PIO on a Raspberry PI or an Odroid C2
 #
 # The Kubii relays we are using are active (switched on) when the input is shorted to ground,
@@ -23,9 +21,11 @@ logger = logging.getLogger(__name__)
 # machine type. Rely on /boot files instead.
 if os.path.exists("/boot/meson64_odroidc2.dtb"):
     machine = "odroidc2"
-else:
+elif os.path.exists("/boot/bcm2708-rpi-b.dtb"):
     machine = "rpi"
-    
+else:
+    machine = "unknown"
+
 try:
     if machine == "rpi":
         import RPi.GPIO as GPIO
@@ -34,7 +34,7 @@ try:
     else:
         raise Exception("Unknown machine %s" %machine)
 except Exception as err:
-    logger.critical("Error importing RPi.GPIO!: %s", err)
+    logger.critical("Error importing GPIO module for %s: %s" % (machine, err))
     sys.exit(1)
 
 class PioIf(object):

@@ -5,6 +5,9 @@
 # Replaced by direct PIO control of a relay board, but we miss the feedback (sensing the actual
 # output from the relay)
 
+# If a t2ss appeared again, this would need to be updated for the new owif interface using pyownet
+
+
 import logging
 import sys
 

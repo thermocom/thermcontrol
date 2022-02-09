@@ -1,12 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 # Climcave: control the cellar temperature by actionning the fans.
-
-# This needs Python2 because python-ow is only python2. See the comments at the top of
-# thermlib/owif.  for newer interfaces. Will become a problem when e.g. conftree gets compatibility
-# issues.
-
-from __future__ import print_function
 
 import os
 import sys
@@ -16,9 +10,9 @@ import datetime
 import time
 import subprocess
 
-import thermlib.conftree
-import thermlib.utils
-import thermlib.owif
+from thermlib import conftree
+from thermlib import utils
+from thermlib import owif
 
 # Log the current temperatures and fan state.
 def logstate(exC, inC, fanB):
@@ -105,9 +99,9 @@ def init():
         if not gpio_pin:
             logger.critical("No gpio_pin defined in configuration")
             sys.exit(1)
-        from pioif import PioIf
+        from thermlib.pioif import PioIf
         global pioif
-        pioif = pioif.PioIf(gpio_pin)
+        pioif = PioIf(gpio_pin)
 
 
 
@@ -133,36 +127,36 @@ currentstate = 0
 while True:
     # Get external and internal temperatures
     try:
-	tempext = owif.readtemp(g_idtempext)
-	tempint = owif.readtemp(g_idtempint)
+        tempext = owif.readtemp(g_idtempext)
+        tempint = owif.readtemp(g_idtempint)
         logger.debug("tempext: %s, tempint: %s", tempext, tempint)
     except:
         logger.exception("climcave: could not read temperatures")
-	# In any case, try to turn the fan off
-	currentstate = turnoffandsleep("Couldn't read temp")
+        # In any case, try to turn the fan off
+        currentstate = turnoffandsleep("Couldn't read temp")
         continue
 
     ##### Read actual device state in case it's not what we think
     try:
         state = fanstate()
     except:
-	currentstate = turnoffandsleep("Couldn't read device state")
+        currentstate = turnoffandsleep("Couldn't read device state")
         continue
     if state != currentstate:
         logger.info("State read from device differs from expected")
-	currentstate = state
+        currentstate = state
 
     target= targetC()
 
     # Compute desired state: turn off if inside too cool, on if too warm, 
     desiredstate = currentstate
     if currentstate == 1 and tempint < target - hyster:
-	desiredstate = 0
+        desiredstate = 0
     if currentstate == 0 and tempint > target + hyster:
-	desiredstate = 1
+        desiredstate = 1
     # stay off anyway if it's too warm outside
     if tempext > tempint - 1:
-	desiredstate = 0
+        desiredstate = 0
 
     now = time.time()
     if currentstate != desiredstate and now - lastchange > minsecs:
@@ -172,11 +166,11 @@ while True:
             else:
                 fanoff()
         except:
-	    currentstate = turnoffandsleep("Couldn't set outputs")
-	    continue
-	currentstate = desiredstate
-	lastchange = now
-	#### Check device state after setting it
+            currentstate = turnoffandsleep("Couldn't set outputs")
+            continue
+        currentstate = desiredstate
+        lastchange = now
+        #### Check device state after setting it
         try:
             actualstate = fanstate()
         except:
@@ -184,10 +178,10 @@ while True:
                 "Couldn't read device state after setting")
             continue
         if actualstate != currentstate:
-	    currentstate = turnoffandsleep(
+            currentstate = turnoffandsleep(
                 "Measured device state %s differs from expected (%s)" %
                 (actualstate, currentstate))
-	    continue
+            continue
 
     logstate(tempext, tempint, currentstate)
 

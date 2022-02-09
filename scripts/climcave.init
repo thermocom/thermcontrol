@@ -23,7 +23,7 @@ RUNDIR=/home/dockes/pyclimcave
 
 case "$1" in
 start)
-    su $psxuid -c "(python $climbin/climcave.py < /dev/null > /tmp/climcave.std 2>&1 )&"
+    su $climuid -c "(python3 $climbin/climcave.py < /dev/null > /tmp/climcave.std 2>&1 )&"
     echo -n ' climcave'
     ;;
 stop)
