@@ -7,10 +7,10 @@ import time
 import threading
 
 from thermlib import conftree
-#from thermlib import owif
 from thermlib import utils
 from thermlib import PID
 from thermlib import gitele
+from thermlib import sensorfact
 import thermlog
 
 # Main heating sequence in seconds: one half-hour
@@ -23,12 +23,6 @@ def init():
     conf = utils.initcommon('THERM_CONFIG')
     global logger
     logger = logging.getLogger(__name__)
-
-    global g_housetempids
-    g_housetempids = conf.get('housetempids').split()
-    if not g_housetempids:
-        logger.critical("No housetempids defined in configuration")
-        sys.exit(1)
 
     global g_uisettingfile, g_tempscratch
     scratchdir = conf.get('scratchdir')
@@ -43,13 +37,11 @@ def init():
     gitif = gitele.Gitele(conf)
     thermlog.init(gitif.getrepo())
 
-    gpio_pin = int(conf.get("gpio_pin"))
-    if not gpio_pin:
-        logger.critical("No gpio_pin defined in configuration")
-        sys.exit(1)
-    from thermlib.pioif import PioIf as PioIf
-    global pioif
-    pioif = PioIf(gpio_pin)
+    global g_temp
+    g_temp = sensorfact.make_temp(conf.as_json(), "temp")
+
+    global g_switch
+    g_switch = sensorfact.make_switch(conf.as_json(), "switch")
 
     # Are we using a PID controller or an on/off
     global g_using_pid, g_heatingperiod
@@ -57,20 +49,20 @@ def init():
     if g_using_pid:
         #  PID coefs
         global g_kp, g_ki, g_kd
-        # Using 100.0 means that we go 100% for 1 degrees of
-        # error. This makes sense if the heating can gain 1 degree in
-        # a period (1/2 hour).
+        # Using 100.0 means that we go 100% for 1 degrees of error. This makes sense if the heating
+        # can gain 1 degree in a period (1/2 hour).
         g_kp = float(conf.get('pid_kp') or 100.0)
-        # The Ki needs to be somewhat normalized against the (very
-        # long) sample period. We use the normalized half kp by
-        # default, meaning that the Ki contribution on a single period
-        # will be half the kp one. Of course it will go up over
-        # multiple periods.
+        # The Ki needs to be somewhat normalized against the (very long) sample period. We use the
+        # normalized half kp by default, meaning that the Ki contribution on a single period will be
+        # half the kp one. Of course it will go up over multiple periods.
         g_ki = float(conf.get('pid_ki') or g_kp/(2.0*g_heatingperiod))
         g_kd = float(conf.get('pid_kd') or 0.0)
     else:
         global g_hysteresis
         g_hysteresis = float(conf.get('hysteresis') or 0.5)
+    # Let things initialize a bit
+    time.sleep(10)
+    
 
 class SetpointGetter(object):
     def __init__(self):
@@ -115,8 +107,7 @@ class SetpointGetter(object):
             except:
                 pass
         now = time.time()
-        logger.debug("SetpointGetter: get. setpointfromgit %s",
-                     self.setpointfromgit)
+        logger.debug("SetpointGetter: get. setpointfromgit %s", self.setpointfromgit)
         if self.setpointfromgit is None or \
                now  > self.lasttime + self.fetchinterval:
             logger.debug("Fetching setpoint")
@@ -128,7 +119,7 @@ class SetpointGetter(object):
             if self.giterrorcnt >= self.maxgiterrors:
                 # Let the watchdog handle this
                 logger.critical("Too many git pull errors, exiting")
-                pioif.turnoff()
+                g_switch.turnoff()
                 sys.exit(1)
             logger.debug("SetpointGetter: got %s", self.setpointfromgit)
             self.lasttime = now
@@ -173,9 +164,8 @@ def create_pid(setpoint):
 # sensors
 def gettemp():
     temp = 0.0
-    for id in g_housetempids:
-        temp += owif.readtemp(id)
-    temp = temp / len(g_housetempids)
+    temp = g_temp.current()
+    logger.debug("Current temperature %.1f ", temp)
     if g_tempscratch:
         try:
             with open(g_tempscratch, 'w') as f:
@@ -205,11 +195,9 @@ def trygettemp():
 def pidloop():
     global world_publisher
     minute = 60
-    # We loop every minute to test things to do (maybe log, turn off
-    # heater or whatever)
+    # We loop every minute to test things to do (maybe log, turn off heater or whatever)
     fastloopseconds = minute
-    # How many fast loops in a heater period: we manage the heater
-    # every 30 minutes.
+    # How many fast loops in a heater period: we manage the heater every 30 minutes.
     global g_heatingperiod
     heaterlooploops = int(g_heatingperiod/fastloopseconds)
 
@@ -221,8 +209,8 @@ def pidloop():
     mypidctl = None
     while True:
         startseconds = time.time()
-        logger.debug("fastloopcount %d heatminutes %d",
-                     fastloopcount, heatminutes)
+        logger.debug("fastloopcount %d heatminutes %d / %d", fastloopcount, heatminutes,
+                     g_heatingperiod/60)
 
         # trygettemp will have us exit if there are too many
         # errors. The watchdog will then notice and reboot.
@@ -236,8 +224,7 @@ def pidloop():
         if setpoint_saved != setpoint or not mypidctl:
             world_publisher.maybe_tell_the_world(force=True)
             mypidctl = create_pid(setpoint)
-            logger.debug("PID tunings: Kp %.2f Ki %.2f Kd %.2f" %
-                         mypidctl.tunings)
+            logger.debug("PID tunings: Kp %.2f Ki %.2f Kd %.2f" % mypidctl.tunings)
                              
         if fastloopcount == 0:
             # Ask PID for the heating duration for the next heater sequence
@@ -249,15 +236,15 @@ def pidloop():
             if heatminutes > heaterlooploops - 5:
                 heatminutes = heaterlooploops
             if heatminutes > 0:
-                pioif.turnon()
+                g_switch.turnon()
                 heateron = True
             else:
-                pioif.turnoff()
+                g_switch.turnoff()
                 heateron = False
         elif fastloopcount == heatminutes:
-            # Time to turn heater off. Note that if heatminutes is
-            # >= extloopinloops, we don't turn off during this cycle
-            pioif.turnoff()
+            # Time to turn heater off. Note that if heatminutes >= extloopinloops, we don't turn off
+            # during this cycle
+            g_switch.turnoff()
             heateron = False
             
         if (fastloopcount % 5) == 0:
@@ -272,7 +259,7 @@ def pidloop():
         
         sleepsecs = fastloopseconds - (time.time() - startseconds)
         if sleepsecs > 0:
-            logger.debug("Sleeping %s seconds", sleepsecs)
+            logger.debug("Sleeping %.2f seconds", sleepsecs)
             time.sleep(sleepsecs)
         fastloopcount += 1
         if fastloopcount >= heaterlooploops:
@@ -286,7 +273,7 @@ def onoffloop():
 
     # We never switch on or off for less than 10 minutes.
     cycleminutes = 10
-    pioif.turnoff()
+    g_switch.turnoff()
     onoff = 0
     while True:
         setpoint_saved = setpoint
@@ -303,10 +290,10 @@ def onoffloop():
 
         savedonoff = onoff
         if actualtemp < setpoint - g_hysteresis and not onoff:
-            pioif.turnon()
+            g_switch.turnon()
             onoff = 1
         if actualtemp > setpoint + g_hysteresis and onoff:
-            pioif.turnoff()
+            g_switch.turnoff()
             onoff = 0
         if savedonoff != onoff:
             thermlog.logstate({'temp':actualtemp, 'set':setpoint, 'on':onoff})

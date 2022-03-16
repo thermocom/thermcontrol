@@ -101,7 +101,7 @@ def init():
             sys.exit(1)
         from thermlib.pioif import PioIf
         global pioif
-        pioif = PioIf(gpio_pin)
+        pioif = PioIf({}, {"gpio_pin":gpio_pin})
 
 
 

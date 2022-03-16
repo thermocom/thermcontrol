@@ -54,7 +54,18 @@ def readtemp(id):
     except Exception as e:
         logger.exception("Could not read temperature from %s", sensorid)
         raise e
- 
+
+class Temp(object):
+    def __init__(self, config, myconfig):
+        self.ids = myconfig["ids"]
+
+    def current(self):
+        temp = 0.0
+        for id in self.ids:
+            temp += readtemp(id)
+        temp = temp / len(g_housetempids)
+        return temp
+    
 
 ##########
 if __name__ == '__main__':

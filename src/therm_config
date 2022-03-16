@@ -1,16 +1,45 @@
-# Fichier installe comme /home/dockes/.therm_config sur le pi0
+// The thermostat config is JSON except that comment lines are allowed and will be deleted
+// while reading. A comment line is any line where the first non-whitespace is either "#" or "//"
 
-logfilename = /home/dockes/logtherm
+{
+    "logfilename": "/home/dockes/logtherm",
+    "loglevel": 5,
+    "datarepo": "/home/dockes/projets/home-control/thermostat/thermdata",
+    "scratchdir": "/home/dockes/projets/home-control/thermostat/scratch",
+    "using_pid": true,
+    "mqttclient": {
+        "clientid": "thermcontroly",
+        "host": "192.168.4.189",
+        "port": 1883
+    },
+    "temp": {
+        "type": "zwavejs2mqtt",
+        // mqtt points to the (shared) above subconf for the MQTT client 
+        "mqtt": "mqttclient",
+        "prefix": "zwave",
+        "nodeid": 8,
+        "endpoint": 0,
+        "property_current": "Air_temperature"
+    },
+    "switch": {
+        "type": "zwavejs2mqtt",
+        "mqtt": "mqttclient",
+        "prefix": "zwave",
+        "nodeid": 8,
+        "endpoint": 0,
+        "property_current": "currentValue",
+        "property_set": "targetValue"
+    },
 
-#1:CRITICAL, 2:ERROR, 3:WARNING, 4:INFO, 5:DEBUG
-loglevel = 5
+    // Example of gpio switch config
+    "switchpio": {
+        "type": "gpio",
+        "gpio_pin": 16
+    },
 
-# Ids for the HA5-connected DS1820
-housetempids = 28.762079A20003
-
-# Pin 16, BCM 23
-gpio_pin = 16
-
-datarepo = /home/dockes/thermdata
-
-using_pid = 1
+    // Example of 1-wire temp config. There could be several ids in id, the temp would be averaged
+    "tempow": {
+        "type": "onewire",
+        "ids": ["28.762079A20003"]
+    }
+}

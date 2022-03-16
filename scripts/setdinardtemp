@@ -9,7 +9,7 @@ Usage() {
     Fatal Usage: setdinardtemp '<temp>'
 }
 
-datadir=/home/dockes/projets/rpi-control/thermostat/thermdata/
+datadir=/home/dockes/projets/home-control/thermostat/thermdata/
 
 if test $# != 1 ; then
    Usage

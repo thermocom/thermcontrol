@@ -6,8 +6,6 @@
 # and does not use the "actions" methods which were intended for
 # things like, e.g. cycling power on a camera.
 
-from __future__ import print_function
-
 import logging
 import subprocess
 import sys
@@ -15,7 +13,7 @@ import os
 import glob
 
 import thermlib.utils
-import thermlib.conftree
+from thermlib import conftree
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +32,8 @@ class Gitele(object):
     def getrepo(self):
         return self.datarepo
 
+    # This is not used by the current client. And will need an adjustment because the config does
+    # not support set any more. Will need to use a separate file.
     def _incseq(self):
         s = self.conf.get("giteleseq")
         if not s:

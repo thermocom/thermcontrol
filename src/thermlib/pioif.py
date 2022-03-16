@@ -39,8 +39,8 @@ except Exception as err:
 
 class PioIf(object):
     # We do things in several executions. A channel already setup is normal
-    def __init__(self, pin):
-        self.gpio_pin = pin
+    def __init__(self, config, myconfig):
+        self.gpio_pin = myconfig["gpio_pin"]
         GPIO.setwarnings(False)
         # GPIO.BCM would tell the interface to use chip pin numbers, not connector
         # ones. The latter are more convenient but there are bugs
@@ -107,7 +107,7 @@ if __name__ == '__main__':
     pin = int(sys.argv[1])
     cmds = sys.argv[2].split()
     perr("pin %d" % pin)
-    pioif = PioIf(pin)
+    pioif = PioIf({}, {"gpio_pin": pin})
     for cmd in cmds:
         perr("cmd %s" % cmd)
         if cmd == "reset":

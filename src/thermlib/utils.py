@@ -2,8 +2,7 @@ import logging
 import sys
 import os
 import subprocess
-
-from thermlib import conftree
+import json
 
 def initlog(conf):
     logfilename = conf.get('logfilename') or "/tmp/therm_log.txt"
@@ -37,6 +36,25 @@ def pidw(pidfile):
     with open(pidfile, "w") as f:
         print("%d" % os.getpid(), file=f)
 
+
+# We now store the config as JSON, but provide a limited compatibility interface (get) with the
+# previous conftree implementation.
+class Config(object):
+    def __init__(self, fn):
+        lines = open(fn, "r").readlines()
+        sdata = ""
+        for line in lines:
+            line = line.strip()
+            if line.startswith("#") or line.startswith("//"):
+                continue
+            sdata += line + "\n"
+        self.config = json.loads(sdata)
+    def get(self, nm):
+        if nm in self.config:
+            return self.config[nm]
+    def as_json(self):
+        return self.config
+
 # Common initialisation part for control / remote
 def initcommon(envconfname):
     confname = None
@@ -46,7 +64,7 @@ def initcommon(envconfname):
         raise Exception("NO %s in environment" % envconfname)
 
     # We open the config rw because we may need to store stuff in there
-    conf = conftree.ConfSimple(confname, readonly=False)
+    conf = Config(confname)
 
     initlog(conf)
     global logger
