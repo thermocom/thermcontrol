@@ -11,10 +11,9 @@ from thermlib import utils
 from thermlib import PID
 from thermlib import gitele
 from thermlib import sensorfact
-import thermlog
+from thermlib import setpoint
 
-# Main heating sequence in seconds: one half-hour
-g_heatingperiod = 1800
+import thermlog
 
 def init():
     # Give ntpd a little time to adjust the date.
@@ -22,16 +21,14 @@ def init():
 
     conf = utils.initcommon('THERM_CONFIG')
     global logger
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger("thermostat")
 
-    global g_uisettingfile, g_tempscratch
+    global g_tempscratch
     scratchdir = conf.get('scratchdir')
-    if scratchdir:
-        g_uisettingfile = os.path.join(scratchdir, 'ui')
-        g_tempscratch = os.path.join(scratchdir, 'ctl')
-    else:
-        g_uisettingfile = None
-        g_tempscratch = None
+    g_tempscratch = os.path.join(scratchdir, 'ctl') if scratchdir else None
+
+    global g_setpoint_getter
+    g_setpoint_getter = setpoint.SetpointGetter(conf)
 
     global gitif
     gitif = gitele.Gitele(conf)
@@ -43,89 +40,28 @@ def init():
     global g_switch
     g_switch = sensorfact.make_switch(conf.as_json(), "switch")
 
+    global g_heatingperiod
+    g_heatingperiod = conf.get("heatingperiod", 1800)
+
     # Are we using a PID controller or an on/off
-    global g_using_pid, g_heatingperiod
-    g_using_pid = int(conf.get("using_pid") or 0)
+    global g_using_pid
+    g_using_pid = conf.get("using_pid", 0)
     if g_using_pid:
         #  PID coefs
         global g_kp, g_ki, g_kd
         # Using 100.0 means that we go 100% for 1 degrees of error. This makes sense if the heating
         # can gain 1 degree in a period (1/2 hour).
-        g_kp = float(conf.get('pid_kp') or 100.0)
+        g_kp = conf.get("pid_kp", 100.0)
         # The Ki needs to be somewhat normalized against the (very long) sample period. We use the
         # normalized half kp by default, meaning that the Ki contribution on a single period will be
         # half the kp one. Of course it will go up over multiple periods.
-        g_ki = float(conf.get('pid_ki') or g_kp/(2.0*g_heatingperiod))
-        g_kd = float(conf.get('pid_kd') or 0.0)
+        g_ki = conf.get("pid_ki", g_kp/(2.0*g_heatingperiod))
+        g_kd = conf.get("pid_kd", 0.0)
     else:
         global g_hysteresis
         g_hysteresis = float(conf.get('hysteresis') or 0.5)
     # Let things initialize a bit
     time.sleep(10)
-    
-
-class SetpointGetter(object):
-    def __init__(self):
-        self.safetemp = 10.0
-        self.setpointfromgit = None
-        self.lasttime = 0
-        # Fetch every 2 hours.
-        self.fetchinterval = 2*60*60
-        self.giterrorcnt = 0
-        self.maxgiterrors = 60
-        
-    def _fetch_setpoint(self):
-        try:
-            gitif.pull()
-        except Exception as e:
-            logger.exception("git command failed: %s", e)
-            return None
-        tempfile = os.path.join(gitif.getrepo(), "consigne")
-        try:
-            with open(tempfile, 'r') as f:
-                temp = f.read().strip()
-        except:
-            logger.exception("Could not read %s", tempfile)
-            return None
-        try:
-            value = float(temp)
-            if value < 5.0 or value > 22.0:
-                raise Exception("Bad set point %s" % temp)
-        except:
-            logger.exception("Bad contents in tempfile")
-            return None
-        return value
-
-    def get(self):
-        # Always check for a local setting, it overrides the remote
-        if g_uisettingfile and os.path.exists(g_uisettingfile):
-            try:
-                cf = conftree.ConfSimple(g_uisettingfile)
-                tmp = cf.get('localsetting')
-                if tmp:
-                    return float(tmp)
-            except:
-                pass
-        now = time.time()
-        logger.debug("SetpointGetter: get. setpointfromgit %s", self.setpointfromgit)
-        if self.setpointfromgit is None or \
-               now  > self.lasttime + self.fetchinterval:
-            logger.debug("Fetching setpoint")
-            self.setpointfromgit = self._fetch_setpoint()
-            if not self.setpointfromgit:
-                self.giterrorcnt += 1
-            else:
-                self.giterrorcnt = 0
-            if self.giterrorcnt >= self.maxgiterrors:
-                # Let the watchdog handle this
-                logger.critical("Too many git pull errors, exiting")
-                g_switch.turnoff()
-                sys.exit(1)
-            logger.debug("SetpointGetter: got %s", self.setpointfromgit)
-            self.lasttime = now
-        return self.setpointfromgit or self.safetemp
-
-setpoint_getter = SetpointGetter()
 
 ### Publishing the logs to the origin repo
 def tell_the_world():
@@ -160,10 +96,8 @@ def create_pid(setpoint):
         auto_mode=True,
         proportional_on_measurement=False)
 
-# Retrieve the interior temperature, possibly by averaging several
-# sensors
+# Retrieve the interior temperature
 def gettemp():
-    temp = 0.0
     temp = g_temp.current()
     logger.debug("Current temperature %.1f ", temp)
     if g_tempscratch:
@@ -197,7 +131,7 @@ def pidloop():
     minute = 60
     # We loop every minute to test things to do (maybe log, turn off heater or whatever)
     fastloopseconds = minute
-    # How many fast loops in a heater period: we manage the heater every 30 minutes.
+    # How many fast loops in a heater period
     global g_heatingperiod
     heaterlooploops = int(g_heatingperiod/fastloopseconds)
 
@@ -220,7 +154,7 @@ def pidloop():
             continue
 
         setpoint_saved = setpoint
-        setpoint = setpoint_getter.get()
+        setpoint = g_setpoint_getter.get()
         if setpoint_saved != setpoint or not mypidctl:
             world_publisher.maybe_tell_the_world(force=True)
             mypidctl = create_pid(setpoint)
@@ -231,7 +165,7 @@ def pidloop():
             command = mypidctl(actualtemp)
             # Command is 0-100
             heatminutes = int((heaterlooploops * command) / 100.0)
-            if heatminutes < 5:
+            if heatminutes < (g_heatingperiod/60)/20:
                 heatminutes = 0
             if heatminutes > heaterlooploops - 5:
                 heatminutes = heaterlooploops
@@ -277,7 +211,7 @@ def onoffloop():
     onoff = 0
     while True:
         setpoint_saved = setpoint
-        setpoint = setpoint_getter.get()
+        setpoint = g_setpoint_getter.get()
         if setpoint_saved != setpoint:
             world_publisher.maybe_tell_the_world(force=True)
             

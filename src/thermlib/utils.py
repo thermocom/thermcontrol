@@ -49,9 +49,10 @@ class Config(object):
                 continue
             sdata += line + "\n"
         self.config = json.loads(sdata)
-    def get(self, nm):
+    def get(self, nm, default=None):
         if nm in self.config:
             return self.config[nm]
+        return default
     def as_json(self):
         return self.config
 
@@ -63,7 +64,6 @@ def initcommon(envconfname):
     if not confname:
         raise Exception("NO %s in environment" % envconfname)
 
-    # We open the config rw because we may need to store stuff in there
     conf = Config(confname)
 
     initlog(conf)

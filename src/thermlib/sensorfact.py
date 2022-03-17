@@ -27,6 +27,12 @@ def make_switch(config, switchsensorname):
         raise Exception("Unknown temp type %s" % switchconfig["type"])
     return switch
 
+# In our context, we only use the thermostat to retrieve the setpoint, and it's always a zwave one
+def make_therm(config, thermsensorname):
+    thermconfig = config[thermsensorname]
+    from thermlib import zwavejs2mqtt
+    therm = zwavejs2mqtt.ThermostatSetpoint(config, thermconfig)
+    return therm
 
 
 if __name__ == '__main__':

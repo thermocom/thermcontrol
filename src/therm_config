@@ -4,9 +4,18 @@
 {
     "logfilename": "/home/dockes/logtherm",
     "loglevel": 5,
-    "datarepo": "/home/dockes/projets/home-control/thermostat/thermdata",
-    "scratchdir": "/home/dockes/projets/home-control/thermostat/scratch",
+    # "git" or "thermostat"
+    "setpointgettertype": "thermostat",
     "using_pid": true,
+    // Main heating period in seconds
+    "heatingperiod" : 600,
+
+    // Used to interact with a local ui writing the setpoint in a file
+    "scratchdir": "/home/dockes/projets/home-control/thermostat/scratch",
+
+    // Used by the git method only
+    "datarepo": "/home/dockes/projets/home-control/thermostat/thermdata",
+    
     "mqttclient": {
         "clientid": "thermcontroly",
         "host": "192.168.4.189",
@@ -16,7 +25,6 @@
         "type": "zwavejs2mqtt",
         // mqtt points to the (shared) above subconf for the MQTT client 
         "mqtt": "mqttclient",
-        "prefix": "zwave",
         "nodeid": 8,
         "endpoint": 0,
         "property_current": "Air_temperature"
@@ -24,11 +32,18 @@
     "switch": {
         "type": "zwavejs2mqtt",
         "mqtt": "mqttclient",
-        "prefix": "zwave",
         "nodeid": 8,
         "endpoint": 0,
         "property_current": "currentValue",
         "property_set": "targetValue"
+    },
+
+    "thermostat": {
+        "type": "zwavejs2mqtt",
+        "mqtt": "mqttclient",
+        "nodeid": 9,
+        "endpoint": 0,
+        "property_current": "setpoint"
     },
 
     // Example of gpio switch config
