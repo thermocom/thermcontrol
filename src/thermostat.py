@@ -49,8 +49,8 @@ def init():
     if g_using_pid:
         #  PID coefs
         global g_kp, g_ki, g_kd
-        # Using 100.0 means that we go 100% for 1 degrees of error. This makes sense if the heating
-        # can gain 1 degree in a period (1/2 hour).
+        # Using 100.0 means that we go 100% for 1 degree of error. This makes sense if the heating
+        # can gain 1 degree in a period.
         g_kp = conf.get("pid_kp", 100.0)
         # The Ki needs to be somewhat normalized against the (very long) sample period. We use the
         # normalized half kp by default, meaning that the Ki contribution on a single period will be
@@ -61,7 +61,8 @@ def init():
         global g_hysteresis
         g_hysteresis = float(conf.get('hysteresis') or 0.5)
     # Let things initialize a bit
-    time.sleep(10)
+    time.sleep(5)
+    g_switch.turnoff()
 
 ### Publishing the logs to the origin repo
 def tell_the_world():
@@ -103,7 +104,7 @@ def gettemp():
     if g_tempscratch:
         try:
             with open(g_tempscratch, 'w') as f:
-                print("measuredtemp = %.2f" % temp, file=f)
+                print("measuredtemp = %.1f" % temp, file=f)
         except:
             pass
     return temp
@@ -127,24 +128,24 @@ def trygettemp():
 
 
 def pidloop():
-    global world_publisher
-    minute = 60
+    global world_publisher, g_heatingperiod
     # We loop every minute to test things to do (maybe log, turn off heater or whatever)
-    fastloopseconds = minute
-    # How many fast loops in a heater period
-    global g_heatingperiod
-    heaterlooploops = int(g_heatingperiod/fastloopseconds)
+    fastloopseconds = 60
+    heaterlooploops = g_heatingperiod / fastloopseconds
 
     fastloopcount = 0
-    heatminutes = 0
-    command = 0.0
-    heateron = False
+    heatseconds = 0
+    command = 0
+    g_switch.turnoff()
     setpoint = 10.0
     mypidctl = None
+    heatperiodstart = time.time()
+    sleepresid = 0
     while True:
-        startseconds = time.time()
-        logger.debug("fastloopcount %d heatminutes %d / %d", fastloopcount, heatminutes,
-                     g_heatingperiod/60)
+        fastloopstart = time.time()
+        timeinperiod = time.time() - heatperiodstart
+        logger.debug("timeinperiod %d heatseconds %d / %d", timeinperiod, heatseconds,
+                     g_heatingperiod)
 
         # trygettemp will have us exit if there are too many
         # errors. The watchdog will then notice and reboot.
@@ -160,30 +161,32 @@ def pidloop():
             mypidctl = create_pid(setpoint)
             logger.debug("PID tunings: Kp %.2f Ki %.2f Kd %.2f" % mypidctl.tunings)
                              
+        
         if fastloopcount == 0:
             # Ask PID for the heating duration for the next heater sequence
             command = mypidctl(actualtemp)
+            sleepresid = 0
+            heatperiodstart = time.time()
+            timeinperiod = 0
             # Command is 0-100
-            heatminutes = int((heaterlooploops * command) / 100.0)
-            if heatminutes < (g_heatingperiod/60)/20:
-                heatminutes = 0
-            if heatminutes > heaterlooploops - 5:
-                heatminutes = heaterlooploops
-            if heatminutes > 0:
+            heatseconds = (g_heatingperiod * command) / 100.0
+            if heatseconds < (g_heatingperiod / 20) or heatseconds < fastloopseconds:
+                heatseconds = 0
+            if heatseconds > 0.95 * g_heatingperiod or \
+               heatseconds > g_heatingperiod - fastloopseconds:
+                heatseconds = g_heatingperiod + 10
+            logger.debug("New result from PID: heatseconds: %.1f" % heatseconds)
+            if heatseconds > 0:
                 g_switch.turnon()
-                heateron = True
             else:
                 g_switch.turnoff()
-                heateron = False
-        elif fastloopcount == heatminutes:
-            # Time to turn heater off. Note that if heatminutes >= extloopinloops, we don't turn off
-            # during this cycle
+        elif g_switch.current() and timeinperiod >= heatseconds:
+            # Time to turn heater off. Does not happen if we're heating full time
             g_switch.turnoff()
-            heateron = False
             
-        if (fastloopcount % 5) == 0:
+        if (int(timeinperiod/60) % 5) == 0:
             # Log stuff every 5 minutes
-            ho = 1 if heateron else 0
+            ho = 1 if g_switch.current() else 0
             p,i,d = mypidctl.components
             thermlog.logstate({'temp':actualtemp, 'set': setpoint, 'on': ho,
                                'cmd': command, 'p' : p, 'i' : i, 'd': d})
@@ -191,9 +194,23 @@ def pidloop():
         # Publish our state (git push) from time to time.
         world_publisher.maybe_tell_the_world()
         
-        sleepsecs = fastloopseconds - (time.time() - startseconds)
+        sleepsecs = fastloopseconds - (time.time() - fastloopstart)
+        logger.debug("Initial sleepsecs %.1f heatseconds %.1f timeinperiod %.1f" %
+                     (sleepsecs, heatseconds, timeinperiod))
+        if g_switch.current():
+            if heatseconds > 0 and sleepsecs > heatseconds - timeinperiod:
+                sleepresid = sleepsecs - (heatseconds - timeinperiod)
+                if sleepresid < 0:
+                    sleepresid = 0
+                else:
+                    sleepsecs -= sleepresid
+                    logger.debug("Sleepsecs too big. sleepresid %.1f sleepsecs %.1f" %
+                                 (sleepresid,sleepsecs))
+        elif sleepresid > 0:
+            sleepsecs += sleepresid
+            sleepresid = 0
         if sleepsecs > 0:
-            logger.debug("Sleeping %.2f seconds", sleepsecs)
+            # logger.debug("Sleeping %.1f seconds", sleepsecs)
             time.sleep(sleepsecs)
         fastloopcount += 1
         if fastloopcount >= heaterlooploops:
@@ -232,7 +249,7 @@ def onoffloop():
         if savedonoff != onoff:
             thermlog.logstate({'temp':actualtemp, 'set':setpoint, 'on':onoff})
 
-        logger.debug("onoffloop: temp %.2f setpoint %.2f on %d",
+        logger.debug("onoffloop: temp %.1f setpoint %.1f on %d",
                      actualtemp, setpoint, onoff)
         # Publish our state (git push) from time to time. 
         world_publisher.maybe_tell_the_world()

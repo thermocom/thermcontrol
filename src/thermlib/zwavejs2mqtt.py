@@ -24,6 +24,7 @@ def _get_client(id, host, port=1883):
         _client = mqtt.Client(client_id=id, clean_session=True)
         _client.on_message = _on_message
         _client.connect(host, port=port)
+        # See https://www.eclipse.org/paho/index.php?page=clients/python/docs/index.php#network-loop
         _client.loop_start()
     return _client
 
@@ -123,6 +124,14 @@ class Switch(object):
     def set(self, state):
         property = "targetValue"
         _set_value(self.client, self.nodeid, self.cc,self.endpoint, property, state)
+        loopcnt = 30
+        loopslp = 0.1
+        for i in range(loopcnt):
+            time.sleep(loopslp)
+            if self.current() == state:
+                return True
+            print("DOing some IO", file=sys.stderr)
+        raise Exception("Switch: not %s after %d S" % (state, int(loopcnt*loopslp)))
 
 
 class ThermostatSetpoint(object):
@@ -148,6 +157,8 @@ class ThermostatSetpoint(object):
             logger.debug("ThermostatSetpoint: no data yet for %s", self.topic)
             return False
 
+
+##############
 if __name__ == "__main__":
     import utils
     import os

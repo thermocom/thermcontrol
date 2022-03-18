@@ -86,7 +86,7 @@ class PioIf(object):
             logger.exception("turnoff pin %d failed", self.gpio_pin)
             raise e
 
-    def state(self):
+    def current(self):
         try:
             return 0 if GPIO.input(self.gpio_pin) else 1
         except Exception as e:

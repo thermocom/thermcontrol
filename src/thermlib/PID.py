@@ -99,8 +99,8 @@ class PID(object):
 
         # compute integral and derivative terms
         self._integral += self.Ki * error * dt
-        logger.debug("PID: dt %f error %.2f integral  %f",
-                     dt, error, self._integral)
+        logger.debug("PID: dt %.2f error %.2f proportional %.2f integral  %.2f",
+                     dt, error, self._proportional, self._integral)
         self._integral = _clamp(self._integral, self.output_limits)  # avoid integral windup
 
         self._derivative = -self.Kd * d_input / dt
