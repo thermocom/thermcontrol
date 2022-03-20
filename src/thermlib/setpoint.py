@@ -26,7 +26,7 @@ class _SetpointGetterGit(object):
             return None
         setpointfile = os.path.join(self.gitif.getrepo(), "consigne")
         try:
-            with open(setpointfile, 'r') as f:
+            with open(setpointfile, "r") as f:
                 temp = f.read().strip()
         except:
             logger.exception("Could not read %s", setpointfile)
@@ -57,6 +57,7 @@ class _SetpointGetterGit(object):
             self.lasttime = now
         return self.setpointfromgit
 
+
 class _SetpointGetterTherm(object):
     def __init__(self, config):
         from thermlib import sensorfact
@@ -77,8 +78,8 @@ class SetpointGetter(object):
         else:
             raise Exception("SetpointGetter: bad getter type %s" % tp)
         self.tp = tp
-        scratchdir = config.get('scratchdir')
-        self.uisettingfile = os.path.join(scratchdir, 'ui') if scratchdir else None
+        scratchdir = config.get("scratchdir")
+        self.uisettingfile = os.path.join(scratchdir, "ui") if scratchdir else None
         logger.debug("SetpointGetter: uisettingfile is %s" % self.uisettingfile)
         
     def get(self):
@@ -86,7 +87,7 @@ class SetpointGetter(object):
         if self.uisettingfile and os.path.exists(self.uisettingfile):
             try:
                 cf = conftree.ConfSimple(self.uisettingfile)
-                tmp = cf.get('localsetting')
+                tmp = cf.get("localsetting")
                 if tmp:
                     logger.debug("SetpointGetter: returning %.1f from local ui" % float(tmp))
                     return float(tmp)

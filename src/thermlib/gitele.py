@@ -83,7 +83,7 @@ class Gitele(object):
         if not self.pull():
             return False
         cmd = ['status', '-s']
-        modified = self._try_run_git(cmd, False)
+        modified = self._try_run_git(cmd, True)
         if modified == "OK":
             logger.debug("gitele push: repo is unmodified")
             return
