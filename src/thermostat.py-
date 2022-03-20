@@ -5,7 +5,6 @@ import sys
 import logging
 import time
 import threading
-import asyncio
 
 from thermlib import conftree
 from thermlib import utils
@@ -77,112 +76,94 @@ class TempGetter(object):
         return temp
 
 
-class PidLoop(object):
-    def __init__(self, statelogger, switch, setpointgetter, tempgetter, world_publisher,
-                 heatingperiod, kp, ki, kd):
-        self.statelogger = statelogger
-        self.switch = switch
-        self.setpointgetter = setpointgetter
-        self.tempgetter = tempgetter
-        self.world_publisher = world_publisher
-        self.heatingperiod = heatingperiod
-        self.kp = kp
-        self.ki = ki
-        self.kd = kd
+def pidloop(statelogger, switch, setpointgetter, tempgetter, world_publisher, heatingperiod,
+            kp, ki, kd):
+    # We loop every minute to test things to do (maybe log, turn off heater or whatever)
+    fastloopseconds = 60
+    heaterlooploops = heatingperiod / fastloopseconds
 
-        # We loop every minute to test things to do (maybe log, turn off heater or whatever)
-        self.fastloopseconds = 60
+    fastloopcount = 0
+    heatseconds = 0
+    command = 0
+    switch.turnoff()
+    setpoint = 10.0
+    mypidctl = None
+    heatperiodstart = time.time()
+    sleepresid = 0
+    while True:
+        fastloopstart = time.time()
+        timeinperiod = time.time() - heatperiodstart
+        logger.debug("timeinperiod %d heatseconds %d / %d", timeinperiod, heatseconds,
+                     heatingperiod)
 
-        self.heatseconds = 0
-        self.setpoint = 10.0
-        self.command = 0
-        self.pidctl = None
-        self.turnoffhandle = None
-        self.slowhandle = None
-        self.switch.turnoff()
-        self.heatperiodstart = time.time()
+        # gettemp will exit the process if there are too many errors. The watchdog will then notice
+        # and reboot.
+        actualtemp = tempgetter.gettemp()
+        if actualtemp is None:
+            time.sleep(15)
+            continue
+
+        setpoint_saved = setpoint
+        setpoint = setpointgetter.get()
+        if setpoint_saved != setpoint or not mypidctl:
+            world_publisher.maybe_tell_the_world(force=True)
+            mypidctl = PID.PID(Kp=kp, Ki=ki, Kd=kd, setpoint=setpoint, output_limits=(0, 100),
+                               sample_time=None, auto_mode=True, proportional_on_measurement=False)
+            logger.debug("PID tunings: Kp %.2f Ki %.2f Kd %.2f" % mypidctl.tunings)
         
-    def fastcallback(self):
-        # Schedule next call
-        loop = asyncio.get_running_loop()
-        loop.call_later(self.fastloopseconds, self.fastcallback)
+        if fastloopcount == 0:
+            # Ask PID for the heating duration for the next heater sequence
+            command = mypidctl(actualtemp)
+            sleepresid = 0
+            heatperiodstart = time.time()
+            timeinperiod = 0
+            # Command is 0-100
+            heatseconds = (heatingperiod * command) / 100.0
+            if heatseconds < (heatingperiod / 20) or heatseconds < fastloopseconds:
+                heatseconds = 0
+            if heatseconds > 0.95 * heatingperiod or \
+               heatseconds > heatingperiod - fastloopseconds:
+                heatseconds = heatingperiod + 10
+            logger.debug("New result from PID: heatseconds: %.1f" % heatseconds)
+            if heatseconds > 0:
+                switch.turnon()
+            else:
+                switch.turnoff()
+        elif switch.current() and timeinperiod >= heatseconds:
+            # Time to turn heater off. Does not happen if we're heating full time
+            switch.turnoff()
+            
+        ho = 1 if switch.current() else 0
+        p,i,d = mypidctl.components
+        statelogger.logstate({"temp":actualtemp, "set": setpoint, "on": ho,
+                              "cmd": command, "p" : p, "i" : i, "d": d})
 
-        timeinperiod = time.time() - self.heatperiodstart
-        logger.debug("timeinperiod %d heatseconds %d / %d",
-                     timeinperiod, self.heatseconds, self.heatingperiod)
-    
-        # Retrieve the temperature. We do it in the fast loop for logging purposes. gettemp will
-        # exit the process if there are too many errors. The watchdog will then notice and reboot.
-        self.actualtemp = self.tempgetter.gettemp()
-        if self.actualtemp is None:
-            return
-
-        # First call or setpoint change: need to create/change the PID object and
-        # schedule/reschedule the slow callback
-        nsetpoint = self.setpointgetter.get()
-        if not self.pidctl or self.setpoint != nsetpoint:
-            self.setpoint = nsetpoint
-            self.pidctl = PID.PID(Kp=self.kp, Ki=self.ki, Kd=self.kd, setpoint=nsetpoint,
-                                  output_limits=(0, 100), sample_time=None,
-                                  auto_mode=True, proportional_on_measurement=False)
-            logger.debug("PID tunings: Kp %.2f Ki %.2f Kd %.2f" % self.pidctl.tunings)
-            if self.turnoffhandle:
-                self.turnoffhandle.cancel()
-            if self.slowhandle:
-                self.slowhandle.cancel()
-            self.slowhandle = loop.call_soon(self.slowcallback)
-
-        # Update the log file
-        ho = 1 if self.switch.current() else 0
-        p,i,d = self.pidctl.components
-        self.statelogger.logstate({"temp": self.actualtemp, "set": self.setpoint, "on": ho,
-                                   "cmd": self.command, "p" : p, "i" : i, "d": d})
         # Publish our state (git push) from time to time.
-        self.world_publisher.maybe_tell_the_world()
-            
+        world_publisher.maybe_tell_the_world()
+        
+        sleepsecs = fastloopseconds - (time.time() - fastloopstart)
+        logger.debug("Initial sleepsecs %.1f heatseconds %.1f timeinperiod %.1f" %
+                     (sleepsecs, heatseconds, timeinperiod))
+        if switch.current():
+            if heatseconds > 0 and sleepsecs > heatseconds - timeinperiod:
+                sleepresid = sleepsecs - (heatseconds - timeinperiod)
+                if sleepresid < 0:
+                    sleepresid = 0
+                else:
+                    sleepsecs -= sleepresid
+                    logger.debug("Sleepsecs too big. sleepresid %.1f sleepsecs %.1f" %
+                                 (sleepresid,sleepsecs))
+        elif sleepresid > 0:
+            sleepsecs += sleepresid
+            sleepresid = 0
+        if sleepsecs > 0:
+            # logger.debug("Sleeping %.1f seconds", sleepsecs)
+            time.sleep(sleepsecs)
+        fastloopcount += 1
+        if fastloopcount >= heaterlooploops:
+            fastloopcount = 0
 
-    def turnoffcallback(self):
-        logger.debug("Turning heater off")
-        self.switch.turnoff()
-            
-
-    def slowcallback(self):
-        # Schedule next call
-        loop = asyncio.get_running_loop()
-        self.slowhandle = loop.call_later(self.heatingperiod, self.slowcallback)
-
-        # Ask PID for the heating duration for the next heater sequence
-        self.command = self.pidctl(self.actualtemp)
-        self.heatperiodstart = time.time()
-        # Command is 0-100
-        self.heatseconds = (self.heatingperiod * self.command) / 100.0
-
-        # Adjust result to avoid short on / off times
-        if self.heatseconds < (self.heatingperiod / 20) or self.heatseconds < self.fastloopseconds:
-            self.heatseconds = 0
-        if self.heatseconds > 0.95 * self.heatingperiod or \
-           self.heatseconds > self.heatingperiod - self.fastloopseconds:
-            self.heatseconds = self.heatingperiod + 10
-        logger.debug("New result from PID: heatseconds: %.1f" % self.heatseconds)
-
-        # Set the switch, possibly scheduling turn off 
-        if self.heatseconds > 0:
-            self.switch.turnon()
-            loop = asyncio.get_running_loop()
-            if self.heatseconds < self.heatingperiod:
-                self.turnoff_handle = loop.call_later(self.heatseconds, self.turnoffcallback)
-        else:
-            self.switch.turnoff()
-                
-
-
-async def pidmain(statelogger, switch, setpointgetter, tempgetter, world_publisher,
-                  heatingperiod, kp, ki, kd):
-    loop = asyncio.get_running_loop()
-    callbacks = PidLoop(statelogger, switch, setpointgetter, tempgetter, world_publisher,
-                        heatingperiod, kp, ki, kd)
-    loop.call_soon(callbacks.fastcallback)
-    loop.run_forever()
+    # End PIDloop
 
 
 def onoffloop(statelogger, switch, setpointgetter, tempgetter, world_publisher, hysteresis):
@@ -259,8 +240,8 @@ def init():
 
     switch.turnoff()
     if using_pid:
-        asyncio.run(pidmain(statelogger, switch, setpointgetter, tempgetter, world_publisher,
-                    heatingperiod, kp, ki, kd))
+        pidloop(statelogger, switch, setpointgetter, tempgetter, world_publisher, heatingperiod,
+                kp, ki, kd)
     else:
         onoffloop(statelogger, switch, setpointgetter, tempgetter, world_publisher, hysteresis)
         
