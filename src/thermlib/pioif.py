@@ -100,7 +100,7 @@ class PioIf(object):
             raise e
     # Compat
     def state(self):
-        return current(self)
+        return self.current()
 
 ##########
 if __name__ == '__main__':

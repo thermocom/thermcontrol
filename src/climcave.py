@@ -48,7 +48,7 @@ def fanstate():
 def turnoffandsleep(s):
     global g_loopsleepsecs
     fanoff()
-    loggerr.debug("Sleeping: %s", s)
+    logerr.debug("Sleeping: %s", s)
     time.sleep(g_loopsleepsecs)
     return 0
 
