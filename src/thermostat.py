@@ -126,8 +126,6 @@ class PidLoop(object):
                                   output_limits=(0, 100), sample_time=None,
                                   auto_mode=True, proportional_on_measurement=False)
             logger.debug("PID tunings: Kp %.2f Ki %.2f Kd %.2f" % self.pidctl.tunings)
-            if self.turnoffhandle:
-                self.turnoffhandle.cancel()
             if self.slowhandle:
                 self.slowhandle.cancel()
             self.slowhandle = loop.call_soon(self.slowcallback)
@@ -147,6 +145,9 @@ class PidLoop(object):
             
 
     def slowcallback(self):
+        # Test needed because turnoffhandle is initially None
+        if self.turnoffhandle:
+            self.turnoffhandle.cancel()
         # Schedule next call
         loop = asyncio.get_running_loop()
         self.slowhandle = loop.call_later(self.heatingperiod, self.slowcallback)
@@ -182,7 +183,8 @@ async def pidmain(statelogger, switch, setpointgetter, tempgetter, world_publish
     callbacks = PidLoop(statelogger, switch, setpointgetter, tempgetter, world_publisher,
                         heatingperiod, kp, ki, kd)
     loop.call_soon(callbacks.fastcallback)
-    loop.run_forever()
+    while True:
+        await asyncio.sleep(10000)
 
 
 def onoffloop(statelogger, switch, setpointgetter, tempgetter, world_publisher, hysteresis):
