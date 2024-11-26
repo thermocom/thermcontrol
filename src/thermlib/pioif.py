@@ -14,22 +14,26 @@ import sys
 import time
 import logging
 import os
+import fnmatch
 
 logger = logging.getLogger(__name__)
 
 # The python "platform" module is not really helpful to determine the
 # machine type. Rely on /boot files instead.
-if os.path.exists("/boot/meson64_odroidc2.dtb"):
-    machine = "odroidc2"
-elif os.path.exists("/boot/bcm2708-rpi-b.dtb"):
-    machine = "rpi"
-else:
-    machine = "unknown"
+machine = "unknown"
+_bootfiles = os.listdir("/boot")
+for f in _bootfiles:
+    if fnmatch.fnmatch(f, "*meson64*"):
+        machine = "odroid"
+        break
+    elif fnmatch.fnmatch(f, "bcm*-rpi*"):
+        machine = "rpi"
+        break
 
 try:
     if machine == "rpi":
         import RPi.GPIO as GPIO
-    elif machine == "odroidc2":
+    elif machine == "odroid":
         import Odroid.GPIO as GPIO
     else:
         raise Exception("Unknown machine %s" %machine)
@@ -40,7 +44,6 @@ except Exception as err:
 class PioIf(object):
     # We do things in several executions. A channel already setup is normal
     def __init__(self, config, myconfig):
-        self.gpio_pin = myconfig["gpio_pin"]
         GPIO.setwarnings(False)
         # GPIO.BCM would tell the interface to use chip pin numbers, not connector
         # ones. The latter are more convenient but there are bugs
@@ -50,8 +53,11 @@ class PioIf(object):
         # To be checked. thermcontrol and climcave work with board pin
         # numbers, the bcm was for the proto with more relays which
         # needed more pins
-        GPIO.setmode(GPIO.BOARD)
-        #GPIO.setmode(GPIO.BCM)
+        self.gpio_mode = GPIO.BOARD
+        if "gpio_mode" in myconfig and "gpio_mode" == "bcm":
+            self.gpio_mode = GPIO.BCM
+        GPIO.setmode(self.gpio_mode)
+        self.gpio_pin = myconfig["gpio_pin"]
         self.setup_gpio()
     
     def setup_gpio(self):
@@ -92,6 +98,9 @@ class PioIf(object):
         except Exception as e:
             logger.exception("state pin %d failed", self.gpio_pin)
             raise e
+    # Compat
+    def state(self):
+        return current(self)
 
 ##########
 if __name__ == '__main__':
@@ -117,7 +126,7 @@ if __name__ == '__main__':
         elif cmd == "off":
             pioif.turnoff()
         elif cmd == "state":
-            print("pin state %d" % pioif.state())
+            print("pin state %d" % pioif.current())
         else:
             usage()
     
